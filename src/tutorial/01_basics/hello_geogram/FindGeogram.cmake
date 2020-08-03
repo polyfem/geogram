@@ -18,7 +18,7 @@
 #          Bruno Levy
 
 set (GEOGRAM_SEARCH_PATHS
-  ${GEOGRAM_INSTALL_PREFIX}                
+  ${GEOGRAM_INSTALL_PREFIX}
   "$ENV{GEOGRAM_INSTALL_PREFIX}"
   "/usr/local/"
   "$ENV{PROGRAMFILES}/Geogram"
@@ -62,11 +62,11 @@ find_package_handle_standard_args(
   Geogram DEFAULT_MSG GEOGRAM_LIBRARY GEOGRAM_INCLUDE_DIR
 )
 
-# Create an imported target for Geogram 
+# Create an imported target for Geogram
 If (Geogram_FOUND)
-  
+
         set(GEOGRAM_INSTALL_PREFIX ${GEOGRAM_INCLUDE_DIR}/..)
-  
+
         if (NOT TARGET Geogram::geogram)
                 add_library (Geogram::geogram UNKNOWN IMPORTED)
 
@@ -99,10 +99,10 @@ If (Geogram_FOUND)
                   IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
                   IMPORTED_LOCATION "${GEOGRAM_GFX_LIBRARY}"
                 )
-                
+
         endif ()
 
-        
+
 endif ()
 
 # Hide variables from the default CMake-Gui options
@@ -131,13 +131,13 @@ if(WIN32)
   # we want M_PI etc...
   add_definitions(-D_USE_MATH_DEFINES)
 
-  if(NOT VORPALINE_BUILD_DYNAMIC) 
-      # If we use static library, we link with the static C++ runtime.
-      foreach(config ${CMAKE_CONFIGURATION_TYPES})
-         string(TOUPPER ${config} config)
-         string(REPLACE /MD /MT CMAKE_C_FLAGS_${config} "${CMAKE_C_FLAGS_${config}}")
-         string(REPLACE /MD /MT CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
-      endforeach()
-  endif()
+  # if(NOT VORPALINE_BUILD_DYNAMIC)
+  #     # If we use static library, we link with the static C++ runtime.
+  #     foreach(config ${CMAKE_CONFIGURATION_TYPES})
+  #        string(TOUPPER ${config} config)
+  #        string(REPLACE /MD /MT CMAKE_C_FLAGS_${config} "${CMAKE_C_FLAGS_${config}}")
+  #        string(REPLACE /MD /MT CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
+  #     endforeach()
+  # endif()
 
-endif()    
+endif()
