@@ -61,8 +61,8 @@ if(VORPALINE_BUILD_DYNAMIC)
 else()
   foreach(config ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${config} config)
-    string(REPLACE /MD /MT CMAKE_C_FLAGS_${config} "${CMAKE_C_FLAGS_${config}}")
-    string(REPLACE /MD /MT CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
+    # string(REPLACE /MD /MT CMAKE_C_FLAGS_${config} "${CMAKE_C_FLAGS_${config}}")
+    # string(REPLACE /MD /MT CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
   endforeach()
 endif()
 
@@ -103,4 +103,4 @@ endfunction()
 macro(vor_add_executable)
     add_executable(${ARGN})
 endmacro()
- 
+
