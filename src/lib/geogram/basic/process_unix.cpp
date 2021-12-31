@@ -494,7 +494,7 @@ namespace GEO
 #ifdef GEO_OS_APPLE
 #if defined(__arm64__)
 			geo_argused(flag);
-			throw "Function not defined on ARM";
+			//throw "Function not defined on ARM";
 #else
 			unsigned int excepts = 0
 								   // | _MM_MASK_INEXACT   // inexact result
