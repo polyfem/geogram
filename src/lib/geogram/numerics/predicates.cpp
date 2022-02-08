@@ -335,6 +335,7 @@ namespace {
 	__m128d maxZ = _mm256_extractf128_pd(maxXYZ,1);
 	__m128d maxY = _mm_shuffle_pd(maxX, maxX, 1);
 	__m128d max_max = _mm_max_pd(maxX, _mm_max_pd(maxY, maxZ));
+    __m128d min_max = _mm_min_pd(maxX, _mm_min_pd(maxY, maxZ));
 
 	// Computing dynamic filter
 	__m128d eps     = _mm_set1_pd(1.2466136531027298e-13);
@@ -358,15 +359,34 @@ namespace {
 
 	double det = avx2_det4x4(L2,X,Y,Z);
 
-	double epsval;
-	_mm_store_pd1(&epsval, eps);
+    double max_maxval[2];
+    _mm_store_pd1(max_maxval, max_max);
+    double min_maxval[2];
+    _mm_store_pd1(min_maxval, min_max);
+
+	double epsval[2];
+	_mm_store_pd1(epsval, eps);
 	
 	// Note: inverted as compared to CGAL
 	//   CGAL: in_sphere_3d (called side_of_oriented_sphere())
 	//      positive side is outside the sphere.
 	//   PCK: in_sphere_3d : positive side is inside the sphere
 
-	return (det > epsval) * -1 + (det < -epsval);
+    if (min_maxval[0] < 1e-58)  { /* sqrt^5(min_double/eps) */
+        // Protect against underflow in the computation of eps.
+        return FPG_UNCERTAIN_VALUE;
+    } else if (max_maxval[0] < 1e61)  { /* sqrt^5(max_double/4 [hadamard]) */
+        // Protect against overflow in the computation of det.
+        eps *= (max_maxval[0] * max_maxval[0]);
+        // Note: inverted as compared to CGAL
+        //   CGAL: in_sphere_3d (called side_of_oriented_sphere())
+        //      positive side is outside the sphere.
+        //   PCK: in_sphere_3d : positive side is inside the sphere
+        if (det > epsval[0])  return -1;
+        if (det < -epsval[0]) return  1;
+    }
+
+    return FPG_UNCERTAIN_VALUE;
     }
     
 #endif
