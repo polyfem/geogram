@@ -46,6 +46,15 @@
 #include "nl_context.h"
 
 /*
+ * FORTRAN local variables are static
+ *   normally. Here we declare them
+ *   on the stack, because it is
+ *   more multithread-friendly.
+ */
+
+#define local
+
+/*
  Many warnings about const double* converted to
  double* when calling BLAS functions that do not
  have the const qualifier in their prototypes.
@@ -143,7 +152,7 @@ static int NL_FORTRAN_WRAP(lsame)(const char *ca, const char *cb)
     int ret_val;
     
     /* Local variables */
-    int inta, intb, zcode;
+    local int inta, intb, zcode;
 
     ret_val = *(unsigned char *)ca == *(unsigned char *)cb;
     if (ret_val) {
@@ -243,7 +252,7 @@ static int NL_FORTRAN_WRAP(lsame)(const char *ca, const char *cb)
     integer i__1;
 
     /* Local variables */
-    static integer i, m, ix, iy, mp1;
+    local integer i, m, ix, iy, mp1;
 
 
 /*     constant times a vector plus a vector.   
@@ -333,9 +342,9 @@ static doublereal NL_FORTRAN_WRAP(ddot)(integer *n, doublereal *dx, integer *inc
     doublereal ret_val;
 
     /* Local variables */
-    static integer i, m;
-    static doublereal dtemp;
-    static integer ix, iy, mp1;
+    local integer i, m;
+    local doublereal dtemp;
+    local integer ix, iy, mp1;
 
 
 /*     forms the dot product of two vectors.   
@@ -423,7 +432,7 @@ L60:
     integer i__1, i__2;
 
     /* Local variables */
-    static integer i, m, nincx, mp1;
+    local integer i, m, nincx, mp1;
 
 
 /*     scales a vector by a constant.   
@@ -509,9 +518,9 @@ static doublereal NL_FORTRAN_WRAP(dnrm2)(integer *n, doublereal *x, integer *inc
     /*double sqrt(doublereal); */
 
     /* Local variables */
-    static doublereal norm, scale, absxi;
-    static integer ix;
-    static doublereal ssq;
+    local doublereal norm, scale, absxi;
+    local integer ix;
+    local doublereal ssq;
 
 
 /*  DNRM2 returns the euclidean norm of a vector via the function   
@@ -588,7 +597,7 @@ static doublereal NL_FORTRAN_WRAP(dnrm2)(integer *n, doublereal *x, integer *inc
     integer i__1;
 
     /* Local variables */
-    static integer i, m, ix, iy, mp1;
+    local integer i, m, ix, iy, mp1;
 
 
 /*     copies a vector, x, to a vector, y.   
@@ -680,11 +689,11 @@ L40:
     integer i__1, i__2; 
 
     /* Local variables */
-    static integer info;
-    static doublereal temp;
-    static integer lenx, leny, i, j;
+    local integer info;
+    local doublereal temp;
+    local integer lenx, leny, i, j;
 /*    extern logical lsame_(char *, char *); */
-    static integer ix, iy, jx, jy, kx, ky;
+    local integer ix, iy, jx, jy, kx, ky;
 /*    extern int xerbla_(char *, integer *); */
 
 
@@ -1017,13 +1026,13 @@ static int NL_FORTRAN_WRAP(dtpsv)(
     integer i__1, i__2;
 
     /* Local variables */
-    static integer info;
-    static doublereal temp;
-    static integer i__, j, k;
+    local integer info;
+    local doublereal temp;
+    local integer i__, j, k;
 /*    extern logical lsame_(); */
-    static integer kk, ix, jx, kx;
+    local integer kk, ix, jx, kx = 0;
 /*    extern int xerbla_(); */
-    static logical nounit;
+    local logical nounit;
 
 /* ***BEGIN PROLOGUE  DTPSV */
 /* ***PURPOSE  Solve one of the systems of equations. */

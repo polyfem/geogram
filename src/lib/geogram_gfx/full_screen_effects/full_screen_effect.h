@@ -74,6 +74,11 @@ namespace GEO {
          */
         FullScreenEffectImpl();
 
+	/**
+	 * \brief FullScreenEffectImpl destructor.
+	 */
+	~FullScreenEffectImpl() override;
+	
 
         /**
          * \brief Gets the minimum required GLSL version needed
@@ -194,7 +199,6 @@ namespace GEO {
 
      protected:
 	FrameBufferObject draw_FBO_;
-	bool core_profile_;
 	bool ES_profile_;
     };
 

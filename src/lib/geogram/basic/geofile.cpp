@@ -46,11 +46,10 @@
 #include <geogram/basic/geofile.h>
 #include <geogram/basic/string.h>
 #include <geogram/basic/logger.h>
-#include <geogram/third_party/pstdint.h>
-
+#include <ctype.h>
 
 /* Using portable printf modifier for 64 bit ints from pstdint.h */
-#include <geogram/third_party/pstdint.h> 
+#include <geogram/third_party/pstdint.h>  
 #define INT64_T_FMT "%" PRINTF_INT64_MODIFIER "d"
 
 namespace {
@@ -129,9 +128,6 @@ namespace GEO {
         ascii_attribute_write_[type_name] = write;
     }
 
-    
-    
-    
     /**************************************************************/
     
     GeoFile::GeoFile(const std::string& filename) :
@@ -280,7 +276,7 @@ namespace GEO {
         index_t len=read_int();
         result.resize(len);
         if(len != 0) {
-            int check = gzread(file_, &result[0], len);
+            int check = gzread(file_, &result[0], (unsigned int)(len));
             if(index_t(check) != len) {
                 throw GeoFileException("Could not read string data from file");
             }
@@ -304,7 +300,7 @@ namespace GEO {
         index_t len = index_t(str.length());
         write_int(len);
         if(len != 0) {
-            int check = gzwrite(file_, &str[0], len);
+            int check = gzwrite(file_, &str[0], (unsigned int)(len));
             if(index_t(check) != len) {
                 throw GeoFileException("Could not write string data to file");
             }
@@ -506,7 +502,10 @@ namespace GEO {
             index_t element_size = read_int();
             index_t dimension = read_int();
             current_attribute_set_ = find_attribute_set(attribute_set_name);
-            if(current_attribute_set_->find_attribute(attribute_name) != nullptr) {
+            if(
+		current_attribute_set_->find_attribute(attribute_name)
+		!= nullptr
+	    ) {
                 throw GeoFileException(
                     "Duplicate attribute " + attribute_name +
                     " in attribute set " + attribute_set_name
@@ -571,7 +570,7 @@ namespace GEO {
             size_t(current_attribute_->element_size) *
             size_t(current_attribute_->dimension) *
             size_t(current_attribute_set_->nb_items);
-        int check = gzread(file_, addr, index_t(size));
+        int check = gzread(file_, addr, (unsigned int)(size));
         if(size_t(check) != size) {
             throw GeoFileException(
                 "Could not read attribute " + current_attribute_->name +
@@ -685,7 +684,9 @@ namespace GEO {
             attribute_set_name
         );
         geo_assert(attribute_set_info != nullptr);
-        geo_assert(attribute_set_info->find_attribute(attribute_name) == nullptr);
+        geo_assert(
+	    attribute_set_info->find_attribute(attribute_name) == nullptr
+	);
 
         size_t data_size =
             element_size * dimension *
@@ -706,7 +707,9 @@ namespace GEO {
             "the name of the attribute set this attribute belongs to"
         );
         write_string(attribute_name, "the name of this attribute");
-        write_string(element_type, "the type of the elements in this attribute");
+        write_string(
+	    element_type, "the type of the elements in this attribute"
+	);
         write_int(index_t(element_size), "the size of an element (in bytes)");
         write_int(dimension, "the number of elements per item");
 
@@ -714,16 +717,19 @@ namespace GEO {
             AsciiAttributeSerializer write_attribute_func =
                 ascii_attribute_write_[element_type];
             if(write_attribute_func == nullptr) {
-                throw GeoFileException("No ASCII serializer for type:"+element_type);                
+                throw GeoFileException(
+		    "No ASCII serializer for type:"+element_type
+		);                
             }
             bool result = (*write_attribute_func)(
-                ascii_file_, Memory::pointer(data), index_t(data_size/element_size)
+                ascii_file_, Memory::pointer(data),
+		index_t(data_size/element_size)
             );
             if(!result) {
-                throw GeoFileException("Could not write attribute data");                
+                throw GeoFileException("Could not write attribute data");
             }
         } else {
-            int check = gzwrite(file_, data, index_t(data_size));
+            int check = gzwrite(file_, data, (unsigned int)(data_size));
             if(size_t(check) != data_size) {
                 throw GeoFileException("Could not write attribute data");
             }
@@ -749,7 +755,27 @@ namespace GEO {
         const std::vector<std::string>& args
     ) {
         write_chunk_header("CMDL", string_array_size(args));
-        write_string_array(args);
+	if(ascii_) {
+	    std::vector<std::string> new_args;
+	    for(const std::string& arg : args) {
+		bool serializable = true;
+		for(index_t i=0; i<arg.size(); ++i) {
+		    if(!isprint(arg[i]) || arg[i] == '\"') {
+			serializable = false;
+			break;
+		    }
+		}
+		if(serializable) {
+		    new_args.push_back(arg);
+		} else {
+		    Logger::warn("GeoFile") << "Skipping arg: "
+					    << arg << std::endl;
+		}
+	    }
+	    write_string_array(new_args);	    
+	} else {
+	    write_string_array(args);
+	}
         check_chunk_size();
     }
 

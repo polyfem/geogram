@@ -598,7 +598,9 @@ namespace GEO {
 		signed_index_t v3 = cavity_.facet_vertex(f,2);
 		new_tet = new_tetrahedron(signed_index_t(v), v1, v2, v3);
 		set_tet_adjacent(new_tet, 0, t_neigh);
-		set_tet_adjacent(t_neigh, find_tet_adjacent(t_neigh,old_tet), new_tet);
+		set_tet_adjacent(
+		    t_neigh, find_tet_adjacent(t_neigh,old_tet), new_tet
+		);
 		cavity_.set_facet_tet(f, new_tet);
 	    }
 	
@@ -1358,7 +1360,7 @@ namespace GEO {
             geo_debug_assert(t < max_t());
             geo_debug_assert(!owns_tet(t));
 
-#ifdef GEO_OS_WINDOWS
+#if defined(GEO_COMPILER_MSVC) 
            // Note: comparand and exchange parameter are swapped in Windows API
            // as compared to __sync_val_compare_and_swap !!
             interfering_thread_ =
@@ -1505,7 +1507,9 @@ namespace GEO {
                      // convention as in CGAL).
                      const double* pv_bkp = pv[f];
                      pv[f] = p;
-                     Sign ori = PCK::orient_3d_inexact(pv[0], pv[1], pv[2], pv[3]);
+                     Sign ori = PCK::orient_3d_inexact(
+			 pv[0], pv[1], pv[2], pv[3]
+		     );
                      
                      //   If the orientation is not negative, then we cannot
                      // walk towards t_next, and examine the next candidate
@@ -2800,9 +2804,9 @@ namespace GEO {
                 Delaunay3dThread* thread = 
                     static_cast<Delaunay3dThread*>(threads_[t].get());
                 Logger::out("PDEL") 
-                    << "thread " << t << " : " 
-                    << thread->nb_rollbacks() << " rollbacks  "
-                    << thread->nb_failed_locate() << " failed locate"
+                    << "thread " << std::setw(3) << t << " : " 
+                    << std::setw(3) << thread->nb_rollbacks() << " rollbacks  "
+                    << std::setw(3) << thread->nb_failed_locate() << " restarted locate"
                     << std::endl;
                 tot_rollbacks += thread->nb_rollbacks();
                 tot_failed_locate += thread->nb_failed_locate();
@@ -2810,7 +2814,7 @@ namespace GEO {
             Logger::out("PDEL") << "------------------" << std::endl;
             Logger::out("PDEL") << "total: " 
                                 << tot_rollbacks << " rollbacks  "
-                                << tot_failed_locate << " failed locate"
+                                << tot_failed_locate << " restarted locate"
                                 << std::endl;
         }
 

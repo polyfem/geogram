@@ -43,8 +43,10 @@
  *
  */
 
-#include <geogram_gfx/glup_viewer/glup_viewer.h>
+#include <geogram_gfx/gui/simple_application.h>
+#include <geogram_gfx/GLUP/GLUP_private.h>
 #include <geogram/delaunay/periodic_delaunay_3d.h>
+
 
 namespace {
 
@@ -55,18 +57,33 @@ namespace {
      *  GLUP primitives and glup_viewer application
      *  framework.
      */
-    class DemoDelaunay3dApplication : public Application {
+    class DemoDelaunay3dApplication : public SimpleApplication {
     public:
 
         /**
          * \brief DemoDelaunay3dApplication constructor.
          */
-        DemoDelaunay3dApplication(
-            int argc, char** argv,
-            const std::string& usage
-        ) : Application(argc, argv, usage) {
+        DemoDelaunay3dApplication() : SimpleApplication("Delaunay3d") {
 
 	    periodic_ = false;
+	    
+            // Define the 3d region that we want to display
+            // (xmin, ymin, zmin, xmax, ymax, zmax)
+            set_region_of_interest(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
+
+	    draw_points_ = false;
+	    draw_cells_ = true;
+	    point_size_ = 10.0f;
+	    cells_shrink_ = 0.1f;
+	    nb_points_ = 100;
+	    draw_box_ = false;
+	    draw_period_ = false;
+	    
+	    start_animation();
+        }
+
+	void geogram_initialize(int argc, char** argv) override {
+	    SimpleApplication::geogram_initialize(argc, argv);
 	    delaunay_ = new PeriodicDelaunay3d(periodic_, 1.0);
 	    // In non-periodic mode, we need to keep the infinite
 	    // tetrahedra to be able to query the combinatorics of
@@ -74,53 +91,41 @@ namespace {
 	    if(!periodic_) {
 		delaunay_->set_keeps_infinite(true);
 	    }
-	    
-            // Define the 3d region that we want to display
-            // (xmin, ymin, zmin, xmax, ymax, zmax)
-            glup_viewer_set_region_of_interest(
-                0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f
-            );
-
-	    animate_ = true;
-	    draw_points_ = true;
-	    draw_cells_ = true;
-	    point_size_ = 10.0f;
-	    cells_shrink_ = 0.1f;
-	    nb_points_ = 100;
-	    draw_box_ = false;
-	    draw_period_ = false;
-
 	    init_random_points(nb_points_);
-        }
-
+	}
+	
         /**
          * \brief DemoDelaunay3dApplication destructor.
          */
-        virtual ~DemoDelaunay3dApplication() {
+	~DemoDelaunay3dApplication() override {
         }
         
         /**
          * \brief Displays and handles the GUI for object properties.
          * \details Overloads Application::draw_object_properties().
          */
-        virtual void draw_object_properties() {
-	    ImGui::Checkbox("Animate", &animate_);
+	void draw_object_properties() override {
+	    SimpleApplication::draw_object_properties();	    
+	    ImGui::Checkbox("Animate", animate_ptr());
 	    
 	    if(ImGui::Button("One iteration", ImVec2(-1.0, 0.0))) {
 		Lloyd_iteration();
 	    }
 
 	    if(
-		ImGui::Button("+", ImVec2(0.4f*ImGui::GetWindowWidth(), 0.0f)) &&
-		nb_points_ < 10000
+		ImGui::Button(
+		    "+",
+		    ImVec2(-ImGui::GetContentRegionAvail().x/2.0f,0.0f)
+		) && nb_points_ < 10000
 	    ) {
 		++nb_points_;
 		init_random_points(nb_points_);				
 	    }
 	    ImGui::SameLine();
 	    if(
-		ImGui::Button("-", ImVec2(0.4f*ImGui::GetWindowWidth(), 0.0f)) &&
-		nb_points_ > 4
+		ImGui::Button(
+		    "-", ImVec2(-1.0f, 0.0f)
+		) && nb_points_ > 4
 	    ) {
 		--nb_points_;
 		init_random_points(nb_points_);				
@@ -151,11 +156,23 @@ namespace {
 	    ImGui::Spacing();
 	    
 	    ImGui::Checkbox("Box", &draw_box_);
-	    ImGui::Checkbox("Period 3x3x3", &draw_period_);	    
-	    ImGui::Checkbox("Points", &draw_points_);	    
-	    ImGui::SliderFloat("PtSz.", &point_size_, 1.0f, 50.0f, "%.1f");
+	    if(ImGui::Checkbox("Period 3x3x3", &draw_period_)) {
+		if(draw_period_) {
+		    set_region_of_interest(
+			-1.0, -1.0, -1.0, 2.0, 2.0, 2.0
+		    );
+		} else {
+		    set_region_of_interest(
+			0.0, 0.0, 0.0, 1.0, 1.0, 1.0
+		    );
+		}
+	    }
+	    ImGui::Checkbox("Points", &draw_points_);
+	    ImGui::SameLine();
+	    ImGui::SliderFloat("##PtSz.", &point_size_, 1.0f, 50.0f, "%.1f");
 	    ImGui::Checkbox("Cells", &draw_cells_);
-	    ImGui::SliderFloat("Shrk.", &cells_shrink_, 0.0f, 1.0f, "%.2f");	    
+	    ImGui::SameLine();
+	    ImGui::SliderFloat("##Shrk.", &cells_shrink_, 0.0f, 1.0f, "%.2f");
         }
 
 	/**
@@ -163,10 +180,9 @@ namespace {
 	 * \details In non-periodic mode, the cell is clipped by the domain.
 	 * \param[in] v the index of the vertex
 	 * \param[out] C the cell
-	 * \param[out] neighbors the Delaunay neighbors of the vertex
 	 */
-	void get_cell(index_t v, ConvexCell& C, vector<index_t>& neighbors) {
-	    delaunay_->copy_Laguerre_cell_from_Delaunay(v, C, neighbors);
+	void get_cell(index_t v, ConvexCell& C) {
+	    delaunay_->copy_Laguerre_cell_from_Delaunay(v, C, W_);
 	    if(!periodic_) {
 		C.clip_by_plane(vec4( 1.0, 0.0, 0.0, 0.0));
 		C.clip_by_plane(vec4(-1.0, 0.0, 0.0, 1.0));
@@ -180,13 +196,14 @@ namespace {
 
 	/**
 	 * \brief Draws a cell.
-	 * \details Needs to be called between glupBegin(GLUP_TRIANGLES) and glupEnd().
+	 * \details Needs to be called between glupBegin(GLUP_TRIANGLES) 
+	 *  and glupEnd().
 	 */
 	void draw_cell(ConvexCell& C, index_t instance = 0) {
 	    double s = double(cells_shrink_);
 	    double Tx = double(Periodic::translation[instance][0]);
 	    double Ty = double(Periodic::translation[instance][1]);
-	    double Tz = double(Periodic::translation[instance][2]);			       
+	    double Tz = double(Periodic::translation[instance][2]);
 	    
 	    vec3 g;
 	    if(cells_shrink_ != 0.0f) {
@@ -217,16 +234,18 @@ namespace {
 		    if(n == 0) {
 			P[0] = C.triangle_point(VBW::ushort(t));
 		    } else if(n == 1) {
-			P[1] = C.triangle_point(VBW::ushort(t));				
+			P[1] = C.triangle_point(VBW::ushort(t));
 		    } else {
 			P[2] = C.triangle_point(VBW::ushort(t));
 			if(s == 0.0) {
 			    for(index_t i=0; i<3; ++i) {
-				glupVertex3d(P[i].x + Tx, P[i].y + Ty, P[i].z + Tz);
+				glupPrivateVertex3d(
+				    P[i].x + Tx, P[i].y + Ty, P[i].z + Tz
+				);
 			    }
 			} else {
-			    for(index_t i=0; i<3; ++i) {				    
-				glupVertex3d(
+			    for(index_t i=0; i<3; ++i) {  
+				glupPrivateVertex3d(
 				    s*g.x + (1.0-s)*P[i].x + Tx,
 				    s*g.y + (1.0-s)*P[i].y + Ty,
 				    s*g.z + (1.0-s)*P[i].z + Tz
@@ -250,7 +269,7 @@ namespace {
          * \brief Draws the scene according to currently set primitive and
          *  drawing modes.
          */
-        virtual void draw_scene() {
+        void draw_scene() override {
 	    // Avoid re-entry, for instance when a message is sent to
 	    // the logger, this triggers a graphic redisplay.
 	    static bool locked = false;
@@ -258,7 +277,7 @@ namespace {
 		return;
 	    }
 	    locked = true;
-	    if(animate_) {
+	    if(animate()) {
 		Lloyd_iteration();
 	    }
             glupSetColor3f(GLUP_FRONT_AND_BACK_COLOR, 0.5f, 0.5f, 0.5f);
@@ -275,15 +294,15 @@ namespace {
 		    glupTranslated(
 			double(Periodic::translation[i][0]),
 			double(Periodic::translation[i][1]),
-			double(Periodic::translation[i][2])			       
+			double(Periodic::translation[i][2])
 	    	    );
 		
 		    glupBegin(GLUP_SPHERES);
-		    for(index_t i=0; i<points_.size()/3; ++i) {
-			glupVertex4d(
-			    points_[3*i],
-			    points_[3*i+1],
-			    points_[3*i+2],
+		    for(index_t v=0; v<points_.size()/3; ++v) {
+			glupPrivateVertex4d(
+			    points_[3*v],
+			    points_[3*v+1],
+			    points_[3*v+2],
 			    R
 			);
 		    }
@@ -292,7 +311,7 @@ namespace {
 		    glupTranslated(
 			-double(Periodic::translation[i][0]),
 			-double(Periodic::translation[i][1]),
-			-double(Periodic::translation[i][2])			       
+			-double(Periodic::translation[i][2])
 	    	    );
 		}
 		
@@ -300,10 +319,9 @@ namespace {
 
 	    if(draw_cells_) {
 		ConvexCell C;
-		vector<index_t> neighbors;
 		glupBegin(GLUP_TRIANGLES);
 		for(index_t v=0; v<points_.size()/3; ++v) {
-		    get_cell(v, C, neighbors);
+		    get_cell(v, C);
 		    if(draw_period_) {
 			for(index_t i=0; i<27; ++i) {
 			    draw_cell(C,i);
@@ -330,7 +348,9 @@ namespace {
 		
 		glupEnable(GLUP_DRAW_MESH);
 		glupEnable(GLUP_ALPHA_DISCARD);
-		glupSetColor4f(GLUP_FRONT_AND_BACK_COLOR, 1.0f, 1.0f, 1.0f, 0.0f);		
+		glupSetColor4f(
+		    GLUP_FRONT_AND_BACK_COLOR, 1.0f, 1.0f, 1.0f, 0.0f
+		);		
 		glupSetMeshWidth(10);
 		glupDisable(GLUP_LIGHTING);
 
@@ -338,7 +358,7 @@ namespace {
 		    glupTranslated(
 			double(Periodic::translation[i][0]),
 			double(Periodic::translation[i][1]),
-			double(Periodic::translation[i][2])			       
+			double(Periodic::translation[i][2])
 	    	    );
 		    
 		    glupBegin(GLUP_QUADS);
@@ -378,7 +398,7 @@ namespace {
 		    glupTranslated(
 			-double(Periodic::translation[i][0]),
 			-double(Periodic::translation[i][1]),
-			-double(Periodic::translation[i][2])			       
+			-double(Periodic::translation[i][2])
 	    	    );
 		}
 
@@ -418,9 +438,8 @@ namespace {
 	void Lloyd_iteration() {
 	    vector<double> new_points(points_.size());
 	    ConvexCell C;
-	    vector<index_t> neighbors;
 	    for(index_t v=0; v<points_.size()/3; ++v) {
-		get_cell(v, C, neighbors);
+		get_cell(v, C);
 		vec3 g = C.barycenter();
 		new_points[3*v]   = g.x;
 		new_points[3*v+1] = g.y;
@@ -443,7 +462,6 @@ namespace {
 	
     private:
 	SmartPointer<PeriodicDelaunay3d> delaunay_;
-	bool animate_;	
 	bool periodic_;
 	bool draw_points_;
         float point_size_;
@@ -453,12 +471,13 @@ namespace {
 	float cells_shrink_;
 	vector<double> points_;
 	int nb_points_;
+	PeriodicDelaunay3d::IncidentTetrahedra W_;
     };
       
 }
 
 int main(int argc, char** argv) {
-    DemoDelaunay3dApplication app(argc, argv, "");
-    app.start();
+    DemoDelaunay3dApplication app;
+    app.start(argc, argv);
     return 0;
 }

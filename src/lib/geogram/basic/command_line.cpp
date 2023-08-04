@@ -86,6 +86,8 @@ namespace {
     using namespace CmdLine;
 
     std::string config_file_name = "geogram.ini";
+    bool auto_create_args = false;
+    bool loaded_config_file = false;
     
     int geo_argc = 0;
     char** geo_argv = nullptr;
@@ -253,6 +255,7 @@ namespace {
         return false;
     }
 
+
     /**
      * \brief Parses the configuration file in the home directory.
      * \details The configuration file "geogram.ini" in the home directory
@@ -260,27 +263,14 @@ namespace {
      *  In addition it has sections indicated by square-breacketed names.
      *  Only the arguments in the section with the same name as the program
      *  are taken into account. Section [*] refers to all possible programs.
-     * \param[in] argc number of arguments passed to main()
-     * \param[in] argv array of command line arguments passed to main()
+     * \param[in] config_filename the name of the configuration file
+     * \param[in] program_name the name of the program
      */
-    void parse_config_file(int argc, char** argv) {
-	geo_assert(argc >= 1);
-	std::string program_name = String::to_uppercase(FileSystem::base_name(argv[0]));
-	static bool init = false;
-	if(init) {
-	    return;
-	}
-	init = true;
-	Logger::out("config") << "Configuration file name:" << config_file_name
-			      << std::endl;
-	Logger::out("config") << "Home directory:" << FileSystem::home_directory()
-			      << std::endl;
-	std::string config_filename = FileSystem::home_directory() + "/" + config_file_name;
+    void parse_config_file(
+	const std::string& config_filename, const std::string& program_name
+    ) {
 	std::string section = "*";
 	if(FileSystem::is_file(config_filename)) {
-	    Logger::out("config") << "Using configuration file:"
-				       << config_filename
-				       << std::endl;
 	    std::ifstream in(config_filename.c_str());
 	    std::string line;
 	    while(std::getline(in,line)) {
@@ -294,12 +284,51 @@ namespace {
 			if(CmdLine::arg_is_declared(argname)) {
 			    CmdLine::set_arg(argname, argval);
 			} else {
-			    Logger::warn("config") << argname << "=" << argval << " ignored" << std::endl;
+			    if(auto_create_args) {
+				CmdLine::declare_arg(argname, argval, "...");
+			    } else {
+				Logger::warn("config") << argname
+						       << "=" << argval
+						       << " ignored"
+						       << std::endl;
+			    }
 			}
 		    }
 		}
 	    }
+	    loaded_config_file= true;
 	}
+    }
+    
+    /**
+     * \brief Parses the configuration file in the home directory.
+     * \details The configuration file "geogram.ini" in the home directory
+     *  has name=value pairs for pre-initializing command line arguments.
+     *  In addition it has sections indicated by square-breacketed names.
+     *  Only the arguments in the section with the same name as the program
+     *  are taken into account. Section [*] refers to all possible programs.
+     * \param[in] argc number of arguments passed to main()
+     * \param[in] argv array of command line arguments passed to main()
+     */
+    void parse_config_file(int argc, char** argv) {
+	geo_assert(argc >= 1);
+	std::string program_name = String::to_uppercase(
+	    FileSystem::base_name(argv[0])
+	);
+	static bool init = false;
+	if(init) {
+	    return;
+	}
+	init = true;
+	Logger::out("config")
+	    << "Configuration file name:" << config_file_name
+	    << std::endl;
+	Logger::out("config")
+	    << "Home directory:" << FileSystem::home_directory()
+	    << std::endl;
+	std::string config_filename =
+	    FileSystem::home_directory() + "/" + config_file_name;
+	parse_config_file(config_filename, program_name);
     }
     
     /**
@@ -409,6 +438,11 @@ namespace {
 	    result = String::to_display_string(x) + "%";
 	} else {
 	    result = CmdLine::get_arg(arg_name);
+	    if(result.length() > ui_terminal_width()/2) {
+                // TODO: fix display long lines in terminal
+		// (that trigger infinite loop for now)
+		result = "...";
+	    }
 	}
 	return result;
     }
@@ -483,7 +517,7 @@ namespace {
             lines.push_back(line);
 
             max_left_width = std::max(
-                index_t(line.name.length() + line.value.length()),
+		index_t(line.name.length() + line.value.length()),
                 max_left_width
             );
         }
@@ -534,12 +568,26 @@ namespace GEO {
 	    return geo_argv;
 	}
 
-	void set_config_file_name(const std::string& filename) {
+	void set_config_file_name(
+	    const std::string& filename, bool auto_create
+	) {
 	    config_file_name = filename;
+	    auto_create_args = auto_create;
 	}
 
 	std::string get_config_file_name() {
 	    return config_file_name;
+	}
+
+	void load_config(
+	    const std::string& filename, const std::string& program_name
+	) {
+	    parse_config_file(filename, program_name);
+	}
+	
+
+	bool config_file_loaded() {
+	    return loaded_config_file;
 	}
 	
         bool parse(
@@ -841,7 +889,7 @@ namespace GEO {
             args.clear();
             for(auto& it : desc_->args) {
                 std::string cur_arg = it.first + "=" + get_arg(it.first);
-                args.push_back(cur_arg);
+		args.push_back(cur_arg);
             }
         }
     }
@@ -1093,11 +1141,10 @@ namespace GEO {
                     ui_out() << "| ";
                     ui_pad(' ', wrap);
                     ui_out() << cur.substr(0, newline);
-                    ui_pad(' ', maxL - newline);
+                    ui_pad(' ', sub(maxL,newline));
                     ui_out() << " |" << std::endl;
                     cur = cur.substr(newline + 1);
-                }
-                else if(cur.length() > maxL) {
+                } else if(cur.length() > maxL) {
                     // The line length runs past the right border
                     // We cut the string just before the border
                     ui_pad(' ', ui_left_margin);
@@ -1106,26 +1153,24 @@ namespace GEO {
                     ui_out() << cur.substr(0, maxL);
                     ui_out() << " |" << std::endl;
                     cur = cur.substr(maxL);
-                }
-                else if(cur.length() != 0) {
+                } else if(cur.length() != 0) {
                     // Print the remaining portion of the string
                     // and pad with spaces
                     ui_pad(' ', ui_left_margin);
                     ui_out() << "| ";
                     ui_pad(' ', wrap);
                     ui_out() << cur;
-                    ui_pad(' ', maxL - cur.length());
+                    ui_pad(' ', sub(maxL,cur.length()));
                     ui_out() << " |";
                     break;
-                }
-                else {
+                } else {
                     // No more chars to print
                     break;
                 }
 
                 if(wrap == 0) {
                     wrap = wrap_margin;
-                    maxL -= wrap_margin;
+                    maxL = sub(maxL,wrap_margin);
                 }
             }
         }
@@ -1271,4 +1316,22 @@ namespace GEO {
         }
     }
 }
+
+#ifdef GEO_OS_ANDROID
+namespace {
+    android_app* android_app_ = nullptr;
+}
+
+namespace GEO {
+    namespace CmdLine {
+	void set_android_app(android_app* app) {
+	    android_app_ = app;
+	}
+	
+	android_app* get_android_app() {
+	    return android_app_;
+	}
+    }
+}
+#endif
 

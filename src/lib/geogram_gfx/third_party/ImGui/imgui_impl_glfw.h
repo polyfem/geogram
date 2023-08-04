@@ -1,52 +1,45 @@
-/*
- * ImGui Platform Binding for: GLFW
- * This needs to be used along with a Renderer (e.g. OpenGL3, Vulkan..)
- * (Info: GLFW is a cross-platform general purpose library for handling windows, inputs, OpenGL/Vulkan graphics context creation, etc.)
- *
- * Implemented features:
- *  [X] Platform: Clipboard support.
- *  [X] Platform: Gamepad navigation mapping. Enable with 'io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad'.
- *  [x] Platform: Mouse cursor shape and visibility. Disable with 'io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange'. FIXME: 3 cursors types are missing from GLFW.
- *
- * You can copy and use unmodified imgui_impl_* files in your project. See main.cpp for an example of using this.
- * If you use this binding you'll need to call 4 functions: ImGui_ImplXXXX_Init(), ImGui_ImplXXXX_NewFrame(), ImGui::Render() and ImGui_ImplXXXX_Shutdown().
- * If you are new to ImGui, see examples/README.txt and documentation at the top of imgui.cpp.
- * https://github.com/ocornut/imgui
- *
- * About GLSL version:
- * The 'glsl_version' initialization parameter defaults to "#version 150" if NULL.
- * Only override if your GL version doesn't handle this GLSL version. Keep NULL if unsure!
- */
+// dear imgui: Platform Binding for GLFW
+// This needs to be used along with a Renderer (e.g. OpenGL3, Vulkan..)
+// (Info: GLFW is a cross-platform general purpose library for handling windows, inputs, OpenGL/Vulkan graphics context creation, etc.)
 
-/* [Bruno] C-style comment */
+// Implemented features:
+//  [X] Platform: Clipboard support.
+//  [X] Platform: Gamepad support. Enable with 'io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad'.
+//  [x] Platform: Mouse cursor shape and visibility. Disable with 'io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange'. FIXME: 3 cursors types are missing from GLFW.
+//  [X] Platform: Keyboard arrays indexed using GLFW_KEY_* codes, e.g. ImGui::IsKeyPressed(GLFW_KEY_SPACE).
+//  [X] Platform: Multi-viewport support (multiple windows). Enable with 'io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable'.
 
-#ifndef __ANDROID__ /* [Bruno] */
+// Issues:
+//  [ ] Platform: Multi-viewport support: ParentViewportID not honored, and so io.ConfigViewportsNoDefaultParent has no effect (minor).
 
-/* [Bruno] */
-#ifdef __cplusplus
-extern "C" {
-#endif
+// You can copy and use unmodified imgui_impl_* files in your project. See main.cpp for an example of using this.
+// If you are new to dear imgui, read examples/README.txt and read the documentation at the top of imgui.cpp.
+// https://github.com/ocornut/imgui
+
+// About GLSL version:
+// The 'glsl_version' initialization parameter defaults to "#version 150" if NULL.
+// Only override if your GL version doesn't handle this GLSL version. Keep NULL if unsure!
+
+#pragma once
+#ifndef __ANDROID__ /* [Bruno Levy] */
+
+#include "imgui.h"      // IMGUI_IMPL_API
 
 struct GLFWwindow;
+struct GLFWmonitor;
 
 IMGUI_IMPL_API bool     ImGui_ImplGlfw_InitForOpenGL(GLFWwindow* window, bool install_callbacks);
 IMGUI_IMPL_API bool     ImGui_ImplGlfw_InitForVulkan(GLFWwindow* window, bool install_callbacks);
 IMGUI_IMPL_API void     ImGui_ImplGlfw_Shutdown();
 IMGUI_IMPL_API void     ImGui_ImplGlfw_NewFrame();
 
-/*
- * GLFW callbacks (installed by default if you enable 'install_callbacks' during initialization)
- * Provided here if you want to chain callbacks.
- * You can also handle inputs yourself and use those as a reference.
- */
+// GLFW callbacks
+// - When calling Init with 'install_callbacks=true': GLFW callbacks will be installed for you. They will call user's previously installed callbacks, if any.
+// - When calling Init with 'install_callbacks=false': GLFW callbacks won't be installed. You will need to call those function yourself from your own GLFW callbacks.
 IMGUI_IMPL_API void     ImGui_ImplGlfw_MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 IMGUI_IMPL_API void     ImGui_ImplGlfw_ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 IMGUI_IMPL_API void     ImGui_ImplGlfw_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 IMGUI_IMPL_API void     ImGui_ImplGlfw_CharCallback(GLFWwindow* window, unsigned int c);
+IMGUI_IMPL_API void     ImGui_ImplGlfw_MonitorCallback(GLFWmonitor* monitor, int event);
 
-/* [Bruno] */    
-#ifdef __cplusplus
-}
-#endif
-    
-#endif /* __ANDROID__ [Bruno] */
+#endif /* __ANDROID__ [Bruno Levy] */

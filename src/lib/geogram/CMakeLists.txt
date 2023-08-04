@@ -14,6 +14,7 @@ aux_source_directories(SOURCES "Source Files\\voronoi"  voronoi)
 aux_source_directories(SOURCES "Source Files\\points"   points)
 aux_source_directories(SOURCES "Source Files\\api"      api)
 aux_source_directories(SOURCES "Source Files\\NL"       NL)
+aux_source_directories(SOURCES "Source Files\\image"    image)
 aux_source_directories(SOURCES "Source Files\\parameterization" parameterization)
 aux_source_directories(SOURCES "Source Files\\bibliography" bibliography)
 
@@ -31,20 +32,21 @@ set_source_files_properties(version.h PROPERTIES GENERATED true)
 
 include_directories(${PROJECT_BINARY_DIR}/src/lib)
 
-#message(STATUS "SOURCES=${SOURCES}")
-#message(STATUS "CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
-#message(STATUS "CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
-#message(STATUS "CMAKE_C_COMPILER=${CMAKE_C_COMPILER}")
-#message(STATUS "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
-
 add_library(geogram ${SOURCES} $<TARGET_OBJECTS:geogram_third_party>)
-
 
 # Jeremie/Maxence: avoids the need to redeclare geogram include
 # path for targets that depend on geogram.
 # See: https://cmake.org/cmake/help/v3.3/command/target_include_directories.html
 # https://stackoverflow.com/questions/26243169/cmake-target-include-directories-meaning-of-scope
-target_include_directories(geogram PUBLIC ${GEOGRAM_PATH}/src/lib) 
+target_include_directories(geogram PUBLIC ${PROJECT_SOURCE_DIR}/src/lib)
+
+if(ANDROID)
+  target_include_directories(geogram PRIVATE
+    ${ANDROID_NDK}/sources/android/native_app_glue
+  )
+  message(STATUS "building for Android")
+endif()  
+
 
 set_target_properties(geogram PROPERTIES
                       VERSION ${VORPALINE_VERSION}

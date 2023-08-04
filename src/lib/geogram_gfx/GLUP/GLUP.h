@@ -163,36 +163,6 @@ extern "C" {
      */
     void GLUP_API glupMakeCurrent(GLUPcontext context);
 
-
-    typedef enum {
-        GLUP_MATRICES_ATTRIBUTES_BIT = 1,
-        GLUP_COLORS_ATTRIBUTES_BIT   = 2,
-        GLUP_LIGHTING_ATTRIBUTES_BIT = 4,
-        GLUP_CLIPPING_ATTRIBUTES_BIT = 8,
-        GLUP_ALL_ATTRIBUTES         = 15
-    } GLUPattributes;
-    
-    /**
-     * \brief Copies some variable from the current fixed 
-     *  functionality pipeline of OpenGL to the current
-     *  GLUP context.
-     * \param[in] which_attributes an '|'-combination of 
-     *  GLUP_MATRICES_ATTRIBUTES_BIT, GLUP_COLORS_ATTRIBUTES_BIT,
-     *  GLUP_LIGHTING_ATTRIBUTES_BIT, GLUP_CLIPPING_ATTRIBUTES_BIT or
-     *  GLUP_ALL_ATTRIBUTES.
-     */
-    void GLUP_API glupCopyFromGLState(GLUPbitfield which_attributes);
-
-    /**
-     * \brief Copies some variables from the current GLUP context
-     *  to the fixed functionality pipeline of OpenGL.
-     * \param[in] which_attributes an '|'-combination of 
-     *  GLUP_MATRICES_ATTRIBUTES_BIT, GLUP_COLORS_ATTRIBUTES_BIT,
-     *  GLUP_LIGHTING_ATTRIBUTES_BIT, GLUP_CLIPPING_ATTRIBUTES_BIT or
-     *  GLUP_ALL_ATTRIBUTES.
-     */
-    void GLUP_API glupCopyToGLState(GLUPbitfield which_attributes);
-    
     /**
      * \brief Binds the GLUP uniform state to a program.
      * \param[in] program the handle to the GLSL program.
@@ -329,6 +299,7 @@ extern "C" {
 
     void GLUP_API glupLightVector3f(GLUPfloat x, GLUPfloat y, GLUPfloat z);
     void GLUP_API glupLightVector3fv(GLUPfloat* xyz);
+    void GLUP_API glupGetLightVector3fv(GLUPfloat* xyz);
 
     void GLUP_API glupSetPointSize(GLUPfloat size);
     GLUPfloat GLUP_API glupGetPointSize(void);

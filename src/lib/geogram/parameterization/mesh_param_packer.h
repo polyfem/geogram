@@ -58,6 +58,14 @@
 namespace GEO {
 
 
+    /**
+     * \brief Packs an atlas using the xatlas library.
+     * \details The mesh needs to have a parameterization
+     *  stored in the tex_coord facet_corner attribute.
+     * \param[in,out] mesh a reference to the mesh
+     */
+    void GEOGRAM_API pack_atlas_using_xatlas(Mesh& mesh);
+
     /****************************************************************/
 
     /**
@@ -84,7 +92,7 @@ namespace GEO {
 	 *  stored in a 2d vector attribute attached to the facet
 	 *  corners and named "tex_coord".
 	 */
-        void pack_surface(Mesh& mesh);
+        void pack_surface(Mesh& mesh, bool normalize_only);
 
 	/**
 	 * \brief Gets the size of the target texture image in
@@ -118,7 +126,8 @@ namespace GEO {
 	 * \brief Sets the size of the margin (or "gutter") around the charts.
 	 * \details This may be required to avoid undesirable blends due to
 	 *  mip-mapping.
-	 * \param[in] width the number of empty pixels to be preserved around each chart.
+	 * \param[in] width the number of empty pixels to be preserved 
+	 *  around each chart.
 	 */
         void set_margin_width_in_pixels(index_t width) {
             margin_width_in_pixels_ = width;
@@ -127,21 +136,25 @@ namespace GEO {
       protected:
 	/**
 	 * \brief Packs a set of charts.
-	 * \param[in,out] charts a const reference to a vector with the charts to be packed.
+	 * \param[in,out] charts a const reference to a vector with the 
+	 *  charts to be packed.
+	 * \param[in] normalize_only if set, just normalize texture coordinates
+	 *  and do not pack the charts.
 	 * \details All the charts are supposed to be attached to the same mesh.
 	 *  Texture coordinates are stored in a 2d vector attribute attached to
 	 *  the facet corners of the mesh and called "tex_coord".
 	 */
-        void pack_charts(vector<Chart>& charts);
+        void pack_charts(vector<Chart>& charts, bool normalize_only = false);
 
 	/**
 	 * \brief Normalizes the parameterization of a chart.
 	 * \param[in,out] chart a reference to the chart to be normalized.
 	 * \details This rescales texture coordinates in such a way that the
-	 *  chart has the same area in 3D and in texture space. This also applies
-	 *  a rotation to the texture coordinates such that the area of the bounding
-	 *  rectangle is minimized. Texture coordinates are stored in a 2d vector 
-	 *  attribute attached to the facet corners of the mesh and called "tex_coord".
+	 *  chart has the same area in 3D and in texture space. 
+	 *  This also applies a rotation to the texture coordinates such that 
+	 *  the area of the bounding rectangle is minimized. 
+	 *  Texture coordinates are stored in a 2d vector attribute attached 
+	 *  to the facet corners of the mesh and called "tex_coord".
 	 */
         void normalize_chart(Chart& chart);
 

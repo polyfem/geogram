@@ -55,10 +55,6 @@ namespace GLUP {
     using namespace GEO;
 
     Context_GLSL150::Context_GLSL150() {
-	const char* vendor = (const char*)glGetString(GL_VENDOR);
-	// Workaround for problem with picking and depth update
-	// in points fragment shader.
-	is_intel_graphics_ = (strstr(vendor,"Intel") != nullptr);
     }
     
     void Context_GLSL150::setup() {
@@ -154,6 +150,7 @@ namespace GLUP {
     }
 
     void Context_GLSL150::setup_GLUP_TETRAHEDRA() {
+	
         GLuint program = GLSL::compile_program_with_includes_no_link(
             this,
             "//stage GL_VERTEX_SHADER\n"
@@ -176,8 +173,40 @@ namespace GLUP {
             "emit_vertex(1, vec4(1.0, 0.0, 0.0, 0.0), compute_clip_coords());\n"
             "}\n"
         );
+	
+
+	// draw_clipped_cell() makes GLSL compiler (linker) crash
+	// with latest NVidia driver -> only if we add the if(draw_mesh)
+	// part ...
+
+	/*
+        GLuint program = GLSL::compile_program_with_includes_no_link(
+            this,
+            "//stage GL_VERTEX_SHADER\n"
+            "//import <GLUPGLSL/vertex_shader.h>\n",
+            "//stage GL_FRAGMENT_SHADER\n"
+            "//import <GLUPGLSL/fragment_shader.h>\n",
+            "//stage GL_GEOMETRY_SHADER\n"
+            "//import <GLUPGLSL/geometry_shader_preamble.h>\n"
+            "//import <GLUPGLSL/marching_cells.h>\n"	    
+            "void main() {\n"
+	    "gl_PrimitiveID = gl_PrimitiveIDIn;\n"
+	    "get_vertices();\n"
+            "emit_vertex(2, vec4(1.0, 0.0, 0.0, 0.0), compute_clip_coords());\n"
+            "emit_vertex(0, vec4(0.0, 1.0, 0.0, 0.0), compute_clip_coords());\n"
+            "emit_vertex(1, vec4(0.0, 0.0, 1.0, 0.0), compute_clip_coords());\n"
+            "emit_vertex(3, vec4(1.0, 0.0, 0.0, 0.0), compute_clip_coords());\n"
+            "EndPrimitive();\n"
+            "emit_vertex(0, vec4(1.0, 0.0, 0.0, 0.0), compute_clip_coords());\n"
+            "emit_vertex(2, vec4(0.0, 1.0, 0.0, 0.0), compute_clip_coords());\n"
+            "emit_vertex(3, vec4(0.0, 0.0, 1.0, 0.0), compute_clip_coords());\n"
+            "emit_vertex(1, vec4(1.0, 0.0, 0.0, 0.0), compute_clip_coords());\n"
+            "}\n"
+        );
+	*/
+	
         set_primitive_info(GLUP_TETRAHEDRA, GL_LINES_ADJACENCY,program);
-        marching_tet_.bind_uniform_state(program);
+	marching_tet_.bind_uniform_state(program);
     }
 
     void Context_GLSL150::setup_GLUP_CONNECTORS() {
@@ -356,11 +385,6 @@ namespace GLUP {
 	    "#endif\n"
         );
 	
-	// Workaround for problem with picking and depth update
-	// in points fragment shader.
-	if(is_intel_graphics_) {
-	    sources.push_back("#define GLUP_INTEL\n");
-	}
         OES_extensions(sources);        
     }
 
@@ -564,13 +588,6 @@ namespace GLUP {
             "#define GLUP_FRAGMENT_SHADER\n"            
 	    "#extension GL_ARB_conservative_depth : enable\n"
         );
-
-	// Workaround for problem with picking and depth update
-	// in points fragment shader.
-	if(is_intel_graphics_) {
-	    sources.push_back("#define GLUP_INTEL\n");
-	}
-	
         OES_extensions(sources);        
     }
 

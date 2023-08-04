@@ -81,6 +81,7 @@ namespace {
     GLuint quad_vertices_VBO = 0;
     GLuint quad_tex_coords_VBO = 0;
     GLuint quad_program = 0;
+    GLuint quad_program_BW = 0;
 
     /**
      * \brief Creates the VAO, VBOs and program used to draw
@@ -149,7 +150,7 @@ namespace {
         glupBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-#ifdef GEO_OS_EMSCRIPTEN
+#if defined(GEO_OS_EMSCRIPTEN) || defined(GEO_OS_ANDROID)
         static const char* vshader_source =
             "#version 100                               \n"            
             "attribute vec2 vertex_in;                  \n"
@@ -173,14 +174,26 @@ namespace {
             "}                                          \n"
             ;
 
+        static const char* fshader_BW_source =
+            "#version 100                               \n"
+	    "precision mediump float;                   \n"        	    
+            "varying vec2 tex_coord;                    \n"
+            "uniform sampler2D tex;                     \n"
+            "void main() {                              \n"
+            "   gl_FragColor = vec4(texture2D(          \n"
+            "       tex, tex_coord                      \n"
+            "   ).xxx,1.0);                             \n"
+            "}                                          \n"
+            ;
+	
 #else
 
         static const char* vshader_source =
-#ifdef GEO_OS_APPLE
+#   ifdef GEO_OS_APPLE
             "#version 330                               \n"	    
-#else	    
+#   else	    
             "#version 130                               \n"
-#endif	    
+#   endif	    
             "in vec2 vertex_in;                         \n"
             "in vec2 tex_coord_in;                      \n"
             "out vec2 tex_coord;                        \n"
@@ -191,11 +204,11 @@ namespace {
             ;
 
         static const char* fshader_source =
-#ifdef GEO_OS_APPLE
+#   ifdef GEO_OS_APPLE
             "#version 330                               \n"	    
-#else	    
+#   else	    
             "#version 130                               \n"
-#endif	    
+#   endif	    
             "out vec4 frag_color ;                      \n"
             "in vec2 tex_coord;                         \n"
             "uniform sampler2D tex;                     \n"
@@ -203,6 +216,22 @@ namespace {
             "   frag_color = texture(                   \n"
             "       tex, tex_coord                      \n"
             "   );                                      \n"
+            "}                                          \n"
+            ;
+
+        static const char* fshader_BW_source =
+#   ifdef GEO_OS_APPLE
+            "#version 330                               \n"	    
+#   else	    
+            "#version 130                               \n"
+#   endif	    
+            "out vec4 frag_color ;                      \n"
+            "in vec2 tex_coord;                         \n"
+            "uniform sampler2D tex;                     \n"
+            "void main() {                              \n"
+            "   frag_color = vec4(texture(              \n"
+            "       tex, tex_coord                      \n"
+            "   ).xxx,1.0);                             \n"
             "}                                          \n"
             ;
 #endif
@@ -214,18 +243,34 @@ namespace {
         GLuint fshader = GLSL::compile_shader(
             GL_FRAGMENT_SHADER, fshader_source, nullptr
         );
+
+        GLuint fshader_BW = GLSL::compile_shader(
+            GL_FRAGMENT_SHADER, fshader_BW_source, nullptr
+        );
         
+	
         quad_program = GLSL::create_program_from_shaders_no_link(
             vshader, fshader, nullptr
         );
+
+        quad_program_BW = GLSL::create_program_from_shaders_no_link(
+            vshader, fshader_BW, nullptr
+        );
+	
         glBindAttribLocation(quad_program, 0, "vertex_in");
         glBindAttribLocation(quad_program, 1, "tex_coord_in");
         GLSL::link_program(quad_program);
-        
-        GLSL::set_program_uniform_by_name(quad_program, "tex", 0);
+
+
+        glBindAttribLocation(quad_program_BW, 0, "vertex_in");
+        glBindAttribLocation(quad_program_BW, 1, "tex_coord_in");
+        GLSL::link_program(quad_program_BW);
+	
+        GLSL::set_program_uniform_by_name(quad_program_BW, "tex", 0);
         
         glDeleteShader(vshader);
         glDeleteShader(fshader);
+        glDeleteShader(fshader_BW);	
     }
 }
 
@@ -240,6 +285,10 @@ namespace GEO {
             if(quad_program != 0) {
                 glDeleteProgram(quad_program);
                 quad_program = 0;
+            }
+            if(quad_program_BW != 0) {
+                glDeleteProgram(quad_program_BW);
+                quad_program_BW = 0;
             }
             if(quad_VAO != 0) {
                 glupDeleteVertexArrays(1, &quad_VAO);
@@ -256,18 +305,6 @@ namespace GEO {
         }
     }
 
-#ifdef GEO_USE_DEPRECATED_GL
-    
-    void glLoadMatrix(const mat4& m) {
-        glLoadMatrixd(convert_matrix(m));
-    }
-
-    void glMultMatrix(const mat4& m) {
-        glMultMatrixd(convert_matrix(m));
-    }
-
-#endif
-    
     void glupMapTexCoords1d(double minval, double maxval, index_t mult) {
         glupMatrixMode(GLUP_TEXTURE_MATRIX);
         GLUPdouble M[16];
@@ -320,7 +357,7 @@ namespace GEO {
 #ifdef GEO_GL_440
         
         static bool init = false;
-        static bool use_glGetBufferParameteri64v = true;
+        static bool use_glGetBufferParameteri64v = false;
 
         // Note: there is a version of glGetBufferParameteriv that uses
         // 64 bit parameters. Since array data larger than 4Gb will be
@@ -469,9 +506,6 @@ namespace GEO {
 	    error_code = glGetError() ;
 	}
         geo_argused(has_opengl_errors);
-//	if(has_opengl_errors) {
-//	    abort();
-//	}
     }
 
     void clear_gl_error_flags(const char* file, int line) {
@@ -484,50 +518,14 @@ namespace GEO {
 #endif	
     }
     
-    void draw_unit_textured_quad() {
-#ifdef GEO_GL_LEGACY
-	static bool initialized = false;
-	static bool vanillaGL = false;
-	if(!initialized) {
-	    vanillaGL = (
-		CmdLine::get_arg("gfx:GLUP_profile") == "VanillaGL"
-	    );
-	    initialized = true;
-	}
-	if(vanillaGL) {
-	    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-	    glDisable(GL_LIGHTING);
-	    glMatrixMode(GL_MODELVIEW);
-	    glPushMatrix();
-	    glLoadIdentity();
-	    glMatrixMode(GL_PROJECTION);
-	    glPushMatrix();
-	    glLoadIdentity();
-	    glEnable(GL_TEXTURE_2D);
-	    glBegin(GL_QUADS);
-	    glTexCoord2f(0.0f, 0.0f);
-	    glVertex2f(-1.0f, -1.0f);
-	    glTexCoord2f(1.0f, 0.0f);
-	    glVertex2f(1.0f, -1.0f);
-	    glTexCoord2f(1.0f, 1.0f);
-	    glVertex2f(1.0f, 1.0f);
-	    glTexCoord2f(0.0f, 1.0f);
-	    glVertex2f(-1.0f, 1.0f);
-	    glEnd();
-	    glPopMatrix();
-	    glMatrixMode(GL_MODELVIEW);
-	    glPopMatrix();
-	    glDisable(GL_TEXTURE_2D);	    
-	    return;
-	}
-#endif	
+    void draw_unit_textured_quad(bool BW) {
         if(quad_VAO == 0) {
             create_quad_VAO_and_program();
         }
         GLint current_program = 0;
         glGetIntegerv(GL_CURRENT_PROGRAM, &current_program);
         if(current_program == 0) {
-            glUseProgram(quad_program);
+            glUseProgram(BW ? quad_program_BW : quad_program);
         }
         glupBindVertexArray(quad_VAO);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);        
@@ -537,5 +535,129 @@ namespace GEO {
         }
     }
 
+    /****************************************************************/
+
+
+    static int htoi(char digit) {
+	if(digit >= '0' && digit <= '9') {
+	    return digit - '0';
+	}
+	if(digit >= 'a' && digit <= 'f') {
+	    return digit - 'a' + 10;
+	}
+	if(digit >= 'A' && digit <= 'F') {
+	    return digit - 'A' + 10;
+	}
+	fprintf(stderr, "xpm: unknown digit\n");
+	return 0;
+    }
+
+    /* The colormap. */
+    static unsigned char i2r[1024];
+    static unsigned char i2g[1024];
+    static unsigned char i2b[1024];
+    static unsigned char i2a[1024];
+    
+    /*
+     * Converts a two-digit XPM color code into
+     *  a color index.
+     */
+    static int char_to_index[256][256];
+    
+    void glTexImage2Dxpm(char const* const* xpm_data) {
+	int width, height, nb_colors, chars_per_pixel;
+	int line = 0;
+	int color = 0;
+	int key1 = 0, key2 = 0;
+	const char* colorcode;
+	int x, y;
+	unsigned char* rgba;
+	unsigned char* pixel;
+
+	sscanf(
+	    xpm_data[line], "%6d%6d%6d%6d",
+	    &width, &height, &nb_colors, &chars_per_pixel
+	);
+	line++;
+	if(nb_colors > 1024) {
+	    fprintf(stderr, "xpm with more than 1024 colors\n");
+	    return;
+	}
+	if(chars_per_pixel != 1 && chars_per_pixel != 2) {
+	    fprintf(stderr, "xpm with more than 2 chars per pixel\n");
+	    return;
+	}
+	for(color = 0; color < nb_colors; color++) {
+	    int r, g, b;
+	    int none ;
+        
+	    key1 = xpm_data[line][0];
+	    key2 = (chars_per_pixel == 2) ? xpm_data[line][1] : 0;
+	    colorcode = strstr(xpm_data[line], "c #");
+	    none = 0;
+	    if(colorcode == nullptr) {
+		colorcode = "c #000000";
+		if(strstr(xpm_data[line], "None") != nullptr) {
+		    none = 1;
+		} else {
+		    fprintf(
+			stderr, "unknown xpm color entry (replaced with black)\n"
+		    );
+		}
+	    }
+	    colorcode += 3;
+
+	    if(strlen(colorcode) == 12) {
+		r = 16 * htoi(colorcode[0]) + htoi(colorcode[1]);
+		g = 16 * htoi(colorcode[4]) + htoi(colorcode[5]);
+		b = 16 * htoi(colorcode[8]) + htoi(colorcode[9]);
+	    } else {
+		r = 16 * htoi(colorcode[0]) + htoi(colorcode[1]);
+		g = 16 * htoi(colorcode[2]) + htoi(colorcode[3]);
+		b = 16 * htoi(colorcode[4]) + htoi(colorcode[5]);
+	    }
+	    
+	    i2r[color] = (unsigned char) r;
+	    i2g[color] = (unsigned char) g;
+	    i2b[color] = (unsigned char) b;
+	    if(none) {
+		i2a[color] = 0;
+	    } else {
+		i2a[color] = 255;
+	    }
+	    char_to_index[key1][key2] = color;
+	    line++;
+	}
+	rgba = (unsigned char*) malloc((size_t) (width * height * 4));
+	pixel = rgba;
+	for(y = 0; y < height; y++) {
+	    for(x = 0; x < width; x++) {
+		if(chars_per_pixel == 2) {
+		    key1 = xpm_data[line][2 * x];
+		    key2 = xpm_data[line][2 * x + 1];
+		} else {
+		    key1 = xpm_data[line][x];
+		    key2 = 0;
+		}
+		color = char_to_index[key1][key2];
+		pixel[0] = i2r[color];
+		pixel[1] = i2g[color];
+		pixel[2] = i2b[color];
+		pixel[3] = i2a[color];
+		pixel += 4;
+	    }
+	    line++;
+	}
+    
+	glTexImage2D(
+	    GL_TEXTURE_2D, 0,
+	    GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba
+	);
+#ifndef __EMSCRIPTEN__    
+	glGenerateMipmap(GL_TEXTURE_2D);
+#endif    
+	free(rgba);
+    }
+    
     
 }

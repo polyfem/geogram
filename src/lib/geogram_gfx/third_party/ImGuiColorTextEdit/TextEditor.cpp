@@ -81,10 +81,13 @@ namespace {
 #endif    
 
 
+// [Bruno Levy] functions for management of HighDPI displays.
 namespace {
-    // [Bruno Levy] functions for management of HighDPI displays.
-
-#ifndef __EMSCRIPTEN__    
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+    double pixel_ratio() {
+	return 1.0;
+    }    
+#else
     /**
      * \brief Computes the pixel ratio for hidpi devices.
      * \details Uses the current GLFW window.
@@ -95,18 +98,11 @@ namespace {
 	GLFWwindow* window = glfwGetCurrentContext();
 	glfwGetFramebufferSize(window, &buf_size[0], &buf_size[1]);
 	glfwGetWindowSize(window, &win_size[0], &win_size[1]);
+	// The window may be iconified.
+	if(win_size[0] == 0) {
+	    return 1.0;
+	}
 	return double(buf_size[0]) / double(win_size[0]);
-    }
-
-    /**
-     * \brief Computes the scaling factor for hidpi devices.
-     * \details Uses the current GLFW window.
-     */
-    double hidpi_scaling() {
-	float xscale, yscale;
-	GLFWwindow* window = glfwGetCurrentContext();
-	glfwGetWindowContentScale(window, &xscale, &yscale);
-	return 0.5 * double(xscale + yscale);
     }
 #endif
     
@@ -507,11 +503,7 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 	auto xadv = (g.Font->IndexAdvanceX['X']);
 
 	// [Bruno Levy] apply highdpi scaling
-#ifdef __EMSCRIPTEN__
-	float s = 1.0f;
-#else	
-	float s = 1.0f / pixel_ratio();
-#endif	
+	float s = 1.0f / float(pixel_ratio());
 	mCharAdvance = ImVec2(s*xadv, s*(g.Font->FontSize + mLineSpacing)); // TODO: apply pixel scaling for HiDPI displays.
 
         //[Bruno Levy] commented-out (I prefer to use default style)
@@ -610,23 +602,23 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 			callback_(TEXT_EDITOR_COMPLETION, callback_client_data_);
 		    }
 		}
-		
-		if (!IsReadOnly())
-		{
-			for (size_t i = 0; i < sizeof(io.InputCharacters) / sizeof(io.InputCharacters[0]); i++)
-			{
-				auto c = (unsigned char)io.InputCharacters[i];
-				if (c != 0)
-				{
-					if (isprint(c) || isspace(c))
-					{
-						if (c == '\r')
-							c = '\n';
-						EnterCharacter((char)c);
-					}
+
+		// [Bruno Levy] ported to ImGui 1.69
+		if(!IsReadOnly()) {
+		    for(int i=0; i<io.InputQueueCharacters.size(); ++i) {
+			char c = char(io.InputQueueCharacters[i]);
+			if(c != '\0') {
+			    if (isprint(c) || isspace(c)) {
+				if(c == '\r') {
+				    c = '\n';
 				}
+				EnterCharacter(c);
+			    }
 			}
+		    }
 		}
+
+		
 	}
 
 	if (ImGui::IsWindowHovered())
@@ -640,7 +632,6 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 			auto tripleClick = click && !doubleClick && t - lastClick < io.MouseDoubleClickTime;
 			if (tripleClick)
 			{
-				printf("triple\n");
 				if (!ctrl)
 				{
 					mState.mCursorPosition = mInteractiveStart = mInteractiveEnd = SanitizeCoordinates(ScreenPosToCoordinates(ImGui::GetMousePos()));
@@ -652,7 +643,6 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 			}
 			else if (doubleClick)
 			{
-				printf("double\n");
 				if (!ctrl)
 				{
 					mState.mCursorPosition = mInteractiveStart = mInteractiveEnd = SanitizeCoordinates(ScreenPosToCoordinates(ImGui::GetMousePos()));
@@ -663,7 +653,7 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 					SetSelection(mInteractiveStart, mInteractiveEnd, mSelectionMode);
 				}
 
-				lastClick = ImGui::GetTime();
+				lastClick = float(ImGui::GetTime());
 			}
 			else if (click)
 			{
@@ -674,7 +664,7 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 					mSelectionMode = SelectionMode::Normal;
 				SetSelection(mInteractiveStart, mInteractiveEnd, mSelectionMode);
 
-				lastClick = ImGui::GetTime();
+				lastClick = float(ImGui::GetTime());
 			}
 			else if (ImGui::IsMouseDragging(0) && ImGui::IsMouseDown(0))
 			{

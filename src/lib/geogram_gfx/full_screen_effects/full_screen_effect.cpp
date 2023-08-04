@@ -56,7 +56,9 @@ namespace {
     void vertex_shader_preamble_pseudo_file(
 	GLSL::PseudoFileProvider* provider, std::vector<GLSL::Source>& sources
     ) {
-	FullScreenEffectImpl* ctxt = dynamic_cast<FullScreenEffectImpl*>(provider);
+	FullScreenEffectImpl* ctxt = dynamic_cast<FullScreenEffectImpl*>(
+	    provider
+	);
 	geo_assert(ctxt != nullptr);
 	ctxt->get_vertex_shader_preamble_pseudo_file(sources);
     }
@@ -64,7 +66,9 @@ namespace {
     void fragment_shader_preamble_pseudo_file(
 	GLSL::PseudoFileProvider* provider, std::vector<GLSL::Source>& sources
     ) {
-	FullScreenEffectImpl* ctxt = dynamic_cast<FullScreenEffectImpl*>(provider);
+	FullScreenEffectImpl* ctxt = dynamic_cast<FullScreenEffectImpl*>(
+	    provider
+	);
 	geo_assert(ctxt != nullptr);
 	ctxt->get_fragment_shader_preamble_pseudo_file(sources);
     }
@@ -77,10 +81,12 @@ namespace GEO {
         OK_(true),
         width_(0),
         height_(0),
-        core_profile_(false),
         ES_profile_(false) {
     }
 
+    FullScreenEffectImpl::~FullScreenEffectImpl() {
+    }
+    
     double FullScreenEffectImpl::required_GLSL_version() const {
         return 1.0;
     }
@@ -172,8 +178,7 @@ namespace GEO {
         width_       = width;
         height_      = height;
         initialized_ = true ;
-	core_profile_ = CmdLine::get_arg("gfx:GL_profile") == "core";
-#ifdef GEO_OS_EMSCRIPTEN
+#if defined(GEO_OS_EMSCRIPTEN) || defined(GEO_OS_ANDROID)
 	ES_profile_ = true;
 #endif
 

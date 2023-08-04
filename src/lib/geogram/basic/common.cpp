@@ -48,6 +48,7 @@
 #include <geogram/basic/logger.h>
 #include <geogram/basic/progress.h>
 #include <geogram/basic/command_line.h>
+#include <geogram/basic/file_system.h>
 #include <geogram/basic/stopwatch.h>
 #include <geogram/numerics/multi_precision.h>
 #include <geogram/numerics/predicates.h>
@@ -55,6 +56,13 @@
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/version.h>
 #include <geogram/bibliography/bibliography.h>
+
+#include <geogram/image/image.h>
+#include <geogram/image/image_library.h>
+#include <geogram/image/image_serializer_stb.h>
+#include <geogram/image/image_serializer_xpm.h>
+#include <geogram/image/image_serializer_pgm.h>
+
 #include <sstream>
 #include <iomanip>
 
@@ -87,7 +95,7 @@ namespace GEO {
         env->set_value("release_date", VORPALINE_BUILD_DATE);
         env->set_value("SVN revision", VORPALINE_SVN_REVISION);        
 #endif
-	
+	FileSystem::initialize();
         Logger::initialize();
         Process::initialize(flags);
         Progress::initialize();
@@ -138,6 +146,20 @@ namespace GEO {
             }
         );
 #endif
+
+#ifndef GEOGRAM_PSM
+        ImageLibrary::initialize() ;
+
+        geo_declare_image_serializer<ImageSerializerSTBReadWrite>("png");
+        geo_declare_image_serializer<ImageSerializerSTBReadWrite>("jpg");
+        geo_declare_image_serializer<ImageSerializerSTBReadWrite>("jpeg");
+        geo_declare_image_serializer<ImageSerializerSTBReadWrite>("tga");
+        geo_declare_image_serializer<ImageSerializerSTBReadWrite>("bmp");
+	
+        geo_declare_image_serializer<ImageSerializer_xpm>("xpm") ;
+        geo_declare_image_serializer<ImageSerializer_pgm>("pgm") ;		
+#endif
+	
 	initialized = true;
     }
 
@@ -152,8 +174,9 @@ namespace GEO {
         }
 
         PCK::terminate();
-	
-#ifndef GEOGRAM_PSM					
+
+#ifndef GEOGRAM_PSM
+        ImageLibrary::terminate() ;
 	Biblio::terminate();
 #endif
 	
@@ -161,6 +184,7 @@ namespace GEO {
         Process::terminate();
         CmdLine::terminate();
         Logger::terminate();
+	FileSystem::terminate();
         Environment::terminate();
     }
 }

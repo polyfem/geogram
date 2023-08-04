@@ -262,7 +262,7 @@ namespace GEO {
 #  error "Unsupported compiler"
 #endif
 
-#if defined(__x86_64) || defined(__ppc64__)
+#if defined(__x86_64) || defined(__ppc64__) || defined(__arm64__) || defined(__aarch64__)
 #  define GEO_ARCH_64
 #else
 #  define GEO_ARCH_32
@@ -283,7 +283,10 @@ namespace GEO {
 #error "Unsupported operating system"
 #endif
 
-#if defined(GEO_COMPILER_GCC) || defined(GEO_COMPILER_CLANG) || defined(GEO_COMPILER_MINGW)
+#if defined(GEO_COMPILER_GCC)   || \
+    defined(GEO_COMPILER_CLANG) || \
+    defined(GEO_COMPILER_MINGW) || \
+    defined(GEO_COMPILER_EMSCRIPTEN)
 #define GEO_COMPILER_GCC_FAMILY
 #endif
 
@@ -311,10 +314,8 @@ namespace GEO {
 
 #if defined(GOMGEN)
 #define GEO_NORETURN
-#elif defined(GEO_COMPILER_CLANG) || \
-    defined(GEO_COMPILER_GCC)   || \
-    defined(GEO_COMPILER_EMSCRIPTEN) || \
-    defined(GEO_COMPILER_INTEL)
+#elif defined(GEO_COMPILER_GCC_FAMILY) || \
+      defined(GEO_COMPILER_INTEL) 
 #define GEO_NORETURN __attribute__((noreturn))
 #else
 #define GEO_NORETURN
@@ -334,11 +335,23 @@ namespace GEO {
 #endif
 #endif
 
+// For Graphite GOM generator (swig is confused by throw() specifier) 
+#ifdef GOMGEN 
+#define GEO_NOEXCEPT
+#endif
+
 #ifndef GEO_NOEXCEPT
 #define GEO_NOEXCEPT throw()
 #endif
 
 #define FOR(I,UPPERBND) for(index_t I = 0; I<index_t(UPPERBND); ++I)
+
+// Silence warnings for alloca()
+// We use it at different places to allocate objects on the stack
+// (for instance, in multi-precision predicates).
+#ifdef GEO_COMPILER_CLANG
+#pragma GCC diagnostic ignored "-Walloca"
+#endif
 
 #endif
 

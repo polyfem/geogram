@@ -45,7 +45,6 @@
 
 #include <geogram_gfx/GLUP/GLUP.h>
 #include <geogram_gfx/GLUP/GLUP_context_GLSL.h>
-#include <geogram_gfx/GLUP/GLUP_context_VanillaGL.h>
 #include <geogram_gfx/GLUP/GLUP_context_ES.h>
 #include <geogram_gfx/basic/GLSL.h>
 #include <geogram/basic/logger.h>
@@ -77,15 +76,7 @@ namespace {
 				<< CmdLine::get_config_file_name() << "\' in " << std::endl;
 	    Logger::out("GLUP") << "     your home directory (" << FileSystem::home_directory() << ")" << std::endl;
 	    Logger::out("GLUP") << "     with: " << std::endl;
-	    Logger::out("GLUP") << "       gfx:GL_profile=core" << std::endl;
-	    Logger::out("GLUP") << " (3) create a file named \'"
-				<< CmdLine::get_config_file_name() << "\' in " << std::endl;
-	    Logger::out("GLUP") << "     your home directory (" << FileSystem::home_directory() << ")" << std::endl;
-	    Logger::out("GLUP") << "     with: " << std::endl;
-	    Logger::out("GLUP") << "       gfx:GL_profile=compatibility" << std::endl;
-	    Logger::out("GLUP") << "       gfx:GLUP_profile=VanillaGL" << std::endl;
-	    Logger::out("GLUP") << " Note: solution (3) will result in degraded performance."
-				<< std::endl;
+	    Logger::out("GLUP") << "       gfx:GLUP_profile=GLUPES2" << std::endl;
 	}
     }
 }
@@ -94,14 +85,45 @@ namespace {
 
 namespace GLUP {
     using namespace GEO;
-    static Context* current_context_ = nullptr;
+    
+    extern GLUP_API Context* current_context_;
+    Context* current_context_ = nullptr;
+    
     static std::set<Context*> all_contexts_;
     static bool initialized_ = false;
     static void cleanup() {
-        for(auto ctxt : all_contexts_) {
-            delete ctxt;
-        }
-        all_contexts_.clear();
+#ifdef GEO_OS_ANDROID
+	// Note: removal of context from all_contexts_
+	// is done in glupDeleteContext() (not in Context
+	// destructor), so we can direcly iterate on all_contexts_
+	// and delete.
+	// TODO: check that GLUP contexts are really destroyed *before*
+	// the OpenGL context. (yes it is, because if I output
+	// something to the logger here, it appears in the app's temrinal).
+	for(auto ctxt: all_contexts_) {
+	    delete ctxt;
+	}
+	all_contexts_.clear();
+	return;
+#endif	
+	
+	// Note: remaining contexts are not deallocated here because:
+	// (1) there should be no remaining context (it is Application's
+	//   job to deallocate them).
+	// (2) when cleanup() is called, Application's delete_window() was
+	//   called before, as well as glfwDeleteWindow() / glfwTerminate()
+	//   so the OpenGL context is destroyed (and it is not legal to destroy
+	//   it before the OpenGL objects in the GLUP context)
+	if(all_contexts_.size() != 0) {
+	    Logger::warn("GLUP") << "Some GLUP contexts were not deallocated"
+				 << std::endl;
+	    Logger::warn("GLUP") << "App\'s GL_terminate() probably forgot to"
+				 << std::endl;
+	    Logger::warn("GLUP") << "call SimpleApplication\'s GL_terminate()"
+				 << std::endl;
+	    Logger::warn("GLUP") << "(needs to be at then end of the function)"
+				 << std::endl;
+	}
     }
     
 }
@@ -146,6 +168,7 @@ namespace {
 	    return 0;
 	}
 	std::string stage_str(p1, size_t(p2-p1));
+	
 	GLenum stage = 0;
 	if(stage_str == "GL_VERTEX_SHADER") {
 	    stage = GL_VERTEX_SHADER;
@@ -156,7 +179,7 @@ namespace {
 #ifndef GEO_OS_EMSCRIPTEN
 	else if(stage_str == "GL_GEOMETRY_SHADER") {
 	    stage = GL_GEOMETRY_SHADER;
-                } else if(stage_str == "GL_TESS_CONTROL_SHADER") {
+	} else if(stage_str == "GL_TESS_CONTROL_SHADER") {
 	    stage = GL_TESS_CONTROL_SHADER;
 	} else if(stage_str == "GL_TESS_EVALUATION_SHADER") {
 	    stage = GL_TESS_EVALUATION_SHADER;
@@ -214,7 +237,11 @@ GLUPuint glupCompileProgram(const char* source_in) {
 	for(index_t i=0; i<index_t(sources.size()); ++i) {
 	    GLUPuint shader = glupCompileShader(targets[i], sources[i]);
 	    if(shader == 0) {
+#ifdef GEO_OS_EMSCRIPTEN
+		return 0;
+#else
 		throw(GLSL::GLSLCompileError());
+#endif		
 	    }
 	    shaders.push_back(shader);
 	}
@@ -228,7 +255,9 @@ GLUPuint glupCompileProgram(const char* source_in) {
         GEO_CHECK_GL();    	
         glBindAttribLocation(program, GLUP::GLUP_VERTEX_ATTRIBUTE, "vertex_in");
         glBindAttribLocation(program, GLUP::GLUP_COLOR_ATTRIBUTE, "color_in");
-        glBindAttribLocation(program, GLUP::GLUP_TEX_COORD_ATTRIBUTE, "tex_coord_in");
+        glBindAttribLocation(
+	    program, GLUP::GLUP_TEX_COORD_ATTRIBUTE, "tex_coord_in"
+	);
         glBindAttribLocation(program, GLUP::GLUP_NORMAL_ATTRIBUTE, "normal_in");
 	
         GEO_CHECK_GL();    		
@@ -261,8 +290,9 @@ void glupBindUniformState(GLUPuint program) {
 }
 
 
-#if defined(GEO_OS_EMSCRIPTEN) || defined(GEO_OS_APPLE)
-#else
+#if !defined(GEO_OS_EMSCRIPTEN) && \
+    !defined(GEO_OS_APPLE) && \
+    !defined(GEO_OS_ANDROID)
 
 /**
  * \brief Tests whether tessellation shaders are supported by OpenGL.
@@ -398,41 +428,18 @@ GLUPcontext glupCreateContext() {
 	    result->setup();	    	    
         } catch(...) {
 	    GEO::Logger::warn("GLUP")
-	        << "Caught an exception in GLUPES2, downgrading to VanillaGL"
+	        << "Caught an exception in GLUPES2"
 	        << std::endl;
 	    downgrade_message();	    
-	    GLUP_profile = "VanillaGL";
 	    delete result;
 	    result = nullptr;
 	}
     }
 #endif
 
-#ifdef GEO_GL_LEGACY    
-    if(GLUP_profile == "VanillaGL") {
-        if(GEO::CmdLine::get_arg("gfx:GL_profile") != "compatibility") {    
-	    GEO::Logger::warn("GLUP")
-	      << "Cannot switch to VanillaGL" << std::endl;
-	    GEO::Logger::warn("GLUP")
-	      << "Needs gfx:GL_profile=compatibility" << std::endl;
-	} else {
-	    try {            
-	        result = new GLUP::Context_VanillaGL;
-		result->setup();	    	    
-	    } catch(...) {
-	        GEO::Logger::warn("GLUP")
-		  << "Caught an exception in VanillaGL"
-		  << std::endl;
-		delete result;
-		result = nullptr;
-	    }
-	}
-    }
-#endif
-
     if(result == nullptr) {
-        GEO::Logger::err("GLUP") << "Could not create context"
-			    << std::endl;
+         GEO::Logger::err("GLUP") << "Could not create context"
+	                          << std::endl;
     } else {
         GLUP::all_contexts_.insert(result);
     }
@@ -458,7 +465,11 @@ void glupDeleteContext(GLUPcontext context_in) {
 
 
 GLUPcontext glupCurrentContext() {
-    GEO_CHECK_GL();    
+    // Note: we cannot check GL state if OpenGL
+    // is not initialized.
+    if(GLUP::current_context_ != nullptr) {
+	GEO_CHECK_GL();
+    }
     return GLUP::current_context_;
 }
 
@@ -470,18 +481,6 @@ const char* glupCurrentProfileName() {
 void glupMakeCurrent(GLUPcontext context) {
     GEO_CHECK_GL();
     GLUP::current_context_ = reinterpret_cast<GLUP::Context*>(context);
-}
-
-void glupCopyFromGLState(GLUPbitfield which_attributes) {
-    GEO_CHECK_GL();    
-    GLUP::current_context_->copy_from_GL_state(which_attributes);
-    GEO_CHECK_GL();        
-}
-
-void glupCopyToGLState(GLUPbitfield which_attributes) {
-    GEO_CHECK_GL();            
-    GLUP::current_context_->copy_to_GL_state(which_attributes);
-    GEO_CHECK_GL();            
 }
 
 GLUPboolean glupPrimitiveSupportsArrayMode(GLUPprimitive prim) {
@@ -644,6 +643,15 @@ void glupLightVector3fv(GLUPfloat* xyz) {
     GEO_CHECK_GL();                
     GLUP::current_context_->uniform_state().light_vector.set(xyz);
     GLUP::current_context_->flag_lighting_as_dirty();
+}
+
+void glupGetLightVector3fv(GLUPfloat* xyz) {
+    GEO_CHECK_GL();                
+    GLUPfloat* ptr =
+        GLUP::current_context_->uniform_state().light_vector.get_pointer();
+    xyz[0] = ptr[0];
+    xyz[1] = ptr[1];
+    xyz[2] = ptr[2];
 }
 
 void glupSetPointSize(GLUPfloat size) {

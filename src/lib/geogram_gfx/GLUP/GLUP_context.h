@@ -507,12 +507,11 @@ namespace GLUP {
          * \brief ImmediateState constructor.
          */
         ImmediateState() :
-            buffer(4),
             current_vertex_(0),
             max_current_vertex_(0),
             primitive_(GLUP_POINTS),
-            VAO_(0) {
-            
+            VAO_(0)
+	{
             buffer[GLUP_VERTEX_ATTRIBUTE].initialize(4);
             buffer[GLUP_COLOR_ATTRIBUTE].initialize(4);
             buffer[GLUP_TEX_COORD_ATTRIBUTE].initialize(4);
@@ -549,7 +548,7 @@ namespace GLUP {
          * \details Only attributes that are enabled are copied.
          */
         void copy_element(index_t to, index_t from) {
-            for(index_t i=0; i<buffer.size(); ++i) {
+            for(index_t i=0; i<NB_IMMEDIATE_BUFFERS; ++i) {
                 buffer[i].copy(to, from);
             }
         }
@@ -576,7 +575,7 @@ namespace GLUP {
          *  to the current vertex position.
          */
         void next_vertex() {
-            for(index_t i=0; i<buffer.size(); ++i) {
+            for(index_t i=0; i<NB_IMMEDIATE_BUFFERS; ++i) {
                 buffer[i].copy_current_to(current_vertex_);
             }
             ++current_vertex_;
@@ -622,8 +621,30 @@ namespace GLUP {
                 primitive_
             ];
         }
-        
-        vector<ImmediateBuffer> buffer;
+
+	/**
+	 * \brief Gets the maximum number of vertices in the buffer
+	 *  before the buffer is flushed.
+	 * \details This number depends on the number of vertices per
+	 *  primitive.
+	 */
+	index_t max_current_vertex() const {
+	    return max_current_vertex_;
+	}
+
+	/**
+	 * \brief Sets the current vertex.
+	 * \details This defines the number of stored vertices in this
+	 *  buffer.
+	 * \param[in] v the index of the current vertex.
+	 */
+	void set_current_vertex(index_t v) {
+	    geo_debug_assert(v <= max_current_vertex_);
+	    current_vertex_ = v;
+	}
+
+	enum { NB_IMMEDIATE_BUFFERS = 4 };
+        ImmediateBuffer buffer[NB_IMMEDIATE_BUFFERS];
         
     private:
         index_t current_vertex_;
@@ -1032,7 +1053,7 @@ namespace GLUP {
         /**
          * \brief Context destructor.
          */
-        virtual ~Context();
+        ~Context() override;
 
 
         /**
@@ -1056,28 +1077,6 @@ namespace GLUP {
          *  functionalities are not implemented in the OpenGL driver.
          */
         virtual void setup();
-
-        
-        /**
-         * \brief Copies the relevant variables from OpenGL 
-         *  fixed functionality pipeline to this GLUP context.
-         * \param[in] which_attributes an '|'-combination of 
-         *  GLUP_MATRICES_ATTRIBUTES_BIT, GLUP_COLORS_ATTRIBUTES_BIT,
-         *  GLUP_LIGHTING_ATTRIBUTES_BIT, GLUP_CLIPPING_ATTRIBUTES_BIT or
-         *  GLUP_ALL_ATTRIBUTES.
-         */
-        virtual void copy_from_GL_state(GLUPbitfield which_attributes);
-
-
-        /**
-         * \brief Copies the relevant variables from this GLUP
-         *  context to OpenGL fixed functionality pipeline.
-         * \param[in] which_attributes an '|'-combination of 
-         *  GLUP_MATRICES_ATTRIBUTES_BIT, GLUP_COLORS_ATTRIBUTES_BIT,
-         *  GLUP_LIGHTING_ATTRIBUTES_BIT, GLUP_CLIPPING_ATTRIBUTES_BIT or
-         *  GLUP_ALL_ATTRIBUTES.
-         */
-        virtual void copy_to_GL_state(GLUPbitfield which_attributes);
         
         /**
          * \brief Binds GLUP uniform state to a program.
@@ -1441,7 +1440,20 @@ namespace GLUP {
         virtual void setup_shaders_source_for_primitive(
             GLUPprimitive primitive
         );
-        
+
+	/**
+	 * \brief Gets the immediate state.
+	 * \return a reference to the immediate state.
+	 */
+	ImmediateState& immediate_state() {
+	    return immediate_state_;
+	}
+
+        /**
+         * \brief Flushes the immediate mode buffers.
+         */
+        virtual void flush_immediate_buffers();
+            
     protected:
 
         /**
@@ -1624,11 +1636,6 @@ namespace GLUP {
             index_t* element_indices
         );
         
-        /**
-         * \brief Flushes the immediate mode buffers.
-         */
-        virtual void flush_immediate_buffers();
-            
         /**
          * \brief Copies GLUP uniform state to OpenGL
          *  if required.

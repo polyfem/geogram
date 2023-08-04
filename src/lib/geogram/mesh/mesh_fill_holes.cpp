@@ -171,11 +171,11 @@ namespace {
         const MeshHalfedges::Halfedge& H
     ) {
         const Mesh& M = MH.mesh();
-        unsigned int c = H.corner;
-        unsigned int f = H.facet;
-        unsigned int v1 = M.facet_corners.vertex(c);
+        index_t c = H.corner;
+        index_t f = H.facet;
+        index_t v1 = M.facet_corners.vertex(c);
         c = M.facets.next_corner_around_facet(f, c);
-        unsigned int v2 = M.facet_corners.vertex(c);
+        index_t v2 = M.facet_corners.vertex(c);
         vec3 E = Geom::mesh_vertex(M, v2) - Geom::mesh_vertex(M, v1);
         vec3 N = Geom::mesh_facet_normal(M, f);
         return cross(E, N);
@@ -524,11 +524,8 @@ namespace {
         index_t f_stamp=1;
         const index_t BRIDGE = index_t(-1);
         
-        for(index_t f=0; f<M.facets.nb(); ++f) {
-            for(
-                index_t c = M.facets.corners_begin(f);
-                c<M.facets.corners_end(f); ++c
-            ) {
+        for(index_t f: M.facets) {
+            for(index_t c: M.facets.corners(f)) {
                 if(
                     M.facet_corners.adjacent_facet(c) == NO_FACET &&
                     !corner_is_visited[c]
@@ -553,7 +550,7 @@ namespace {
             }
         }
         index_t nb_bridges = 0;
-        for(index_t f=0; f<M.facets.nb(); ++f) {
+        for(index_t f: M.facets) {
             if(f_status[f] == BRIDGE) {
                 ++nb_bridges;
             } else {
@@ -598,10 +595,8 @@ namespace GEO {
         // Step 1: detect holes
         {
             vector<bool> corner_is_visited(M.facet_corners.nb(), false);
-            for(index_t f = 0; f < M.facets.nb(); f++) {
-                for(index_t c = M.facets.corners_begin(f);
-                    c < M.facets.corners_end(f); c++
-                 ) {
+            for(index_t f: M.facets) {
+                for(index_t c: M.facets.corners(f)) {
                     if(
                         M.facet_corners.adjacent_facet(c) == NO_FACET &&
                         !corner_is_visited[c]
@@ -751,13 +746,11 @@ namespace GEO {
     ) {
         MeshHalfedges MH(M);
 	vector<index_t> delete_f(M.facets.nb(),0);
-	FOR(f,M.facets.nb()) {
+	for(index_t f: M.facets) {
 	    if(M.facets.nb_vertices(f) > max_nb_vertices) {
 		delete_f[f] = 1;
 		Hole h;
-		for(
-		    index_t c=M.facets.corners_begin(f);
-		    c<M.facets.corners_end(f); ++c) {
+		for(index_t c: M.facets.corners(f)) {
 		    h.push_back(MeshHalfedges::Halfedge(f,c));
 		}
 		tessellate_hole(MH, h, max_nb_vertices, f);

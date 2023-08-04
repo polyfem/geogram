@@ -284,7 +284,7 @@ namespace GEO {
 		nlBegin(NL_SYSTEM);
 
 		if(constrain_hard_edges) {
-		    FOR(c,mesh->facet_corners.nb()) {
+		    for(index_t c: mesh->facet_corners) {
 			index_t cnstr =
 			    Internal::get_edge_constraints(mesh, c, B);
 			index_t v = mesh->facet_corners.vertex(c);
@@ -323,7 +323,7 @@ namespace GEO {
 		// Lock at least one variable per connected component.
 		{
 		    std::vector<bool> f_visited(mesh->facets.nb(),false);
-		    FOR(f,mesh->facets.nb()) {
+		    for(index_t f: mesh->facets) {
 			if(!f_visited[f]) {
 			    index_t nb_locked=0;
 			    index_t first_v = mesh->facets.vertex(f,0);
@@ -385,7 +385,7 @@ namespace GEO {
 		    }
 		}
 		
-		FOR(f,mesh->facets.nb()) {
+		for(index_t f: mesh->facets) {
 
 		    vec3 Bf, BTf;
 
@@ -448,24 +448,18 @@ namespace GEO {
 			    nlBegin(NL_ROW);
 			    for(index_t j=0; j<4; ++j) {
 				double a1 = Rot[Rc1][i][j];
-				//std::cerr << a1 << " ";
 				if(a1 != 0.0) {
 				    nlCoefficient(v1*4+j, a1);
 				}
 			    }
-			    //std::cerr << " --- ";
 			    for(index_t j=0; j<4; ++j) {
 				double a2 = Rotc2[i][j];
-				//std::cerr << a2 << " ";
 				if(a2 != 0.0) {
 				    nlCoefficient(v2*4+j, -a2);
 				}
 			    }
 			    nlEnd(NL_ROW);
-			    //std::cerr << std::endl;
 			}
-
-			//std::cerr << std::endl << std::endl;
 		    }
 		}
 		
@@ -482,7 +476,7 @@ namespace GEO {
 		    );
 		}
 		
-		FOR(c, mesh->facet_corners.nb()) {
+		for(index_t c: mesh->facet_corners) {
 		    index_t v = mesh->facet_corners.vertex(c);
 		    // Inverse R, because when the axis turns
 		    // clockwise, coordinates turn anticlockwise.
@@ -514,7 +508,7 @@ namespace GEO {
 		    mesh->facets.attributes(),"is_singular"
 		);
 		
-		FOR(f,mesh->facets.nb()) {
+		for(index_t f: mesh->facets) {
 		    singular[f] = false;
 		    for(index_t c1=mesh->facets.corners_begin(f);
 			c1<mesh->facets.corners_end(f); ++c1) {
@@ -554,7 +548,7 @@ namespace GEO {
 		    }
 		}
 
-		FOR(c, mesh->facet_corners.nb()) {
+		for(index_t c: mesh->facet_corners) {
 		    U[c].x /= M_PI;
 		    U[c].y /= M_PI;
 		    Internal::snap_tex_coord(U[c].x);
@@ -609,10 +603,10 @@ namespace GEO {
 	    const double solver_scale = 1e3;
 	    
 	    nlBegin(NL_SYSTEM);
-	    nlLockVariable(0);
-	    nlSetVariable(0,locked_value);
+	    nlLockVariable(0u);
+	    nlSetVariable(0u,locked_value);
 	    nlBegin(NL_MATRIX);
-	    FOR(f,mesh->facets.nb()) {
+	    for(index_t f: mesh->facets) {
 
 		index_t va = mesh->facets.vertex(f,0);
 		index_t vb = mesh->facets.vertex(f,1);
@@ -751,7 +745,7 @@ namespace GEO {
 	    nlSolve();
 	    double min_val = Numeric::max_float64();
 	    double max_val = Numeric::min_float64();
-	    FOR(v,mesh->vertices.nb()) {
+	    for(index_t v: mesh->vertices) {
 		CC[v] = ::exp(
 		    (nlGetVariable(v)-locked_value)/solver_scale)
 		;
@@ -761,7 +755,7 @@ namespace GEO {
 	    double avg_val = 0.5 * (min_val + max_val);
 	    double min_limit = 1.0 / ::sqrt(max_scaling_correction);
 	    double max_limit = ::sqrt(max_scaling_correction);
-	    FOR(v,mesh->vertices.nb()) {
+	    for(index_t v: mesh->vertices) {
 		CC[v] = CC[v] / avg_val;
 		geo_clamp(CC[v], min_limit, max_limit);
 	    }

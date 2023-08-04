@@ -613,7 +613,7 @@ namespace GLUP {
         // the offsets of GLUP context state variables.
         // Note: it needs to use all the variables of the uniform state,
         // else, depending on the OpenGL driver / library,
-        // some variables may be optimized-out and glGetUnformIndices()
+        // some variables may be optimized-out and glGetUniformIndices()
         // returns GL_INVALID_INDEX (stupid !), this is why there is
         // this (weird) function
         //  create_vertex_program_that_uses_all_UBO_variables()        
@@ -813,7 +813,7 @@ namespace GLUP {
         glupGenVertexArrays(1,&immediate_state_.VAO());
         glupBindVertexArray(immediate_state_.VAO());
         
-        for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+        for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
             update_buffer_object(
                 immediate_state_.buffer[i].VBO(),
                 GL_ARRAY_BUFFER,
@@ -828,7 +828,7 @@ namespace GLUP {
 
     void Context::stream_immediate_buffers() {
 	if(immediate_state_.nb_vertices() == IMMEDIATE_BUFFER_SIZE) {
-	    for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+	    for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
 		if(
 		    immediate_state_.buffer[i].is_enabled() &&
 		    immediate_state_.buffer[i].VBO() != 0
@@ -842,7 +842,7 @@ namespace GLUP {
 		}
 	    }
 	} else {
-	    for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+	    for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
 		if(
 		    immediate_state_.buffer[i].is_enabled() &&
 		    immediate_state_.buffer[i].VBO() != 0
@@ -873,168 +873,6 @@ namespace GLUP {
             default_program_, name.c_str()
         );
         return uniform_buffer_data_ + offset;
-    }
-
-    void Context::copy_from_GL_state(GLUPbitfield which_attributes) {
-#ifndef GEO_GL_LEGACY
-        geo_argused(which_attributes);
-        return;
-#else        
-        // No "GL state" in core profile.
-        if(use_core_profile_) {
-            return;
-        }
-        
-        uniform_buffer_dirty_ = true;
-        
-        //  I observed that without these instructions,
-        // glGet() does not always
-        // return the latest set values under Windows.
-        glFlush();
-        glFinish();
-
-        if(which_attributes & GLUP_MATRICES_ATTRIBUTES_BIT) {
-            matrices_dirty_ = true;            
-            glGetFloatv(
-                GL_PROJECTION_MATRIX,
-                matrix_stack_[GLUP_PROJECTION_MATRIX].top()
-            );
-            glGetFloatv(
-                GL_MODELVIEW_MATRIX,
-                matrix_stack_[GLUP_MODELVIEW_MATRIX].top()
-            );
-            glGetFloatv(
-                GL_TEXTURE_MATRIX,
-                matrix_stack_[GLUP_TEXTURE_MATRIX].top()
-            );
-        }
-
-        if(which_attributes & GLUP_CLIPPING_ATTRIBUTES_BIT) {
-            uniform_state_.toggle[GLUP_CLIPPING].set(
-                glIsEnabled(GL_CLIP_PLANE0)
-            );
-            GLdouble clip_plane_d[4];
-            glGetClipPlane(GL_CLIP_PLANE0, clip_plane_d);
-            copy_vector(
-                uniform_state_.clip_plane.get_pointer(), clip_plane_d, 4
-            );
-
-	    mult_matrix_vector(
-                uniform_state_.world_clip_plane.get_pointer(),
-                uniform_state_.modelview_matrix.get_pointer(),
-                uniform_state_.clip_plane.get_pointer()            
-            );
-
-	    GLfloat projection_invert[16];
-	    GLboolean OK = invert_matrix(
-		projection_invert,
-		uniform_state_.projection_matrix.get_pointer()
-	    );
-	    if(!OK) {
-		Logger::warn("GLUP") << "Singular projection matrix"
-				     << std::endl;
-		show_matrix(uniform_state_.projection_matrix.get_pointer());
-	    }
-	    mult_matrix_vector(
-		uniform_state_.clip_clip_plane.get_pointer(),
-		projection_invert,
-		uniform_state_.clip_plane.get_pointer()
-	    );
-	    
-        }
-        
-        if(which_attributes & GLUP_LIGHTING_ATTRIBUTES_BIT) {
-            lighting_dirty_ = true;
-            uniform_state_.toggle[GLUP_LIGHTING].set(glIsEnabled(GL_LIGHTING));
-            GLfloat light[4];
-            glGetLightfv(GL_LIGHT0, GL_POSITION, light);
-            copy_vector(uniform_state_.light_vector.get_pointer(), light, 3);
-        }            
-
-        if(which_attributes & GLUP_COLORS_ATTRIBUTES_BIT) {
-            glGetMaterialfv(
-                GL_FRONT, GL_DIFFUSE,
-                uniform_state_.color[GLUP_FRONT_COLOR].get_pointer()
-            );
-            glGetMaterialfv(
-                GL_BACK, GL_DIFFUSE,
-                uniform_state_.color[GLUP_BACK_COLOR].get_pointer()
-            );
-        }
-#endif        
-    }
-
-    void Context::copy_to_GL_state(GLUPbitfield which_attributes) {
-#ifndef GEO_GL_LEGACY
-        geo_argused(which_attributes);
-        return;
-#else        
-        // No "GL state" in core profile.
-        if(use_core_profile_) {
-            return;
-        }
-
-        GLint matrix_mode_save;
-        glGetIntegerv(GL_MATRIX_MODE, &matrix_mode_save);
-
-        if(which_attributes & GLUP_MATRICES_ATTRIBUTES_BIT) {
-            glMatrixMode(GL_PROJECTION);
-            glLoadMatrixf(matrix_stack_[GLUP_PROJECTION_MATRIX].top());
-            glMatrixMode(GL_MODELVIEW);
-            glLoadMatrixf(matrix_stack_[GLUP_MODELVIEW_MATRIX].top());
-            glMatrixMode(GL_TEXTURE);
-            glLoadMatrixf(matrix_stack_[GLUP_TEXTURE_MATRIX].top());
-        }
-
-        if(which_attributes & GLUP_CLIPPING_ATTRIBUTES_BIT) {
-            if(uniform_state_.toggle[GLUP_CLIPPING].get()) {
-                glEnable(GL_CLIP_PLANE0);
-            } else {
-                glDisable(GL_CLIP_PLANE0);
-            }
-            GLdouble clip_plane_d[4];
-            glGetClipPlane(GL_CLIP_PLANE0, clip_plane_d);
-            copy_vector(
-                clip_plane_d, uniform_state_.clip_plane.get_pointer(), 4
-            );
-            glMatrixMode(GL_MODELVIEW);
-            glPushMatrix();
-            glLoadIdentity();
-            glClipPlane(GL_CLIP_PLANE0, clip_plane_d);
-            glPopMatrix();
-        }
-
-        if(which_attributes & GLUP_LIGHTING_ATTRIBUTES_BIT) {
-            if(uniform_state_.toggle[GLUP_LIGHTING].get()) {
-                glEnable(GL_LIGHTING);
-                glEnable(GL_LIGHT0);
-            } else {
-                glDisable(GL_LIGHTING);
-                glDisable(GL_LIGHT0);
-            }
-            GLfloat light[4];
-            copy_vector(light, uniform_state_.light_vector.get_pointer(), 3);
-            light[3] = 0.0f;
-            glMatrixMode(GL_MODELVIEW);
-            glPushMatrix();
-            glLoadIdentity();
-            glLightfv(GL_LIGHT0, GL_POSITION, light);
-            glPopMatrix();
-        }
-
-        if(which_attributes & GLUP_COLORS_ATTRIBUTES_BIT) {
-            glMaterialfv(
-                GL_FRONT, GL_DIFFUSE,
-                uniform_state_.color[GLUP_FRONT_COLOR].get_pointer()
-            );
-            glMaterialfv(
-                GL_BACK, GL_DIFFUSE,
-                uniform_state_.color[GLUP_BACK_COLOR].get_pointer()
-            );
-        }
-
-        glMatrixMode(GLenum(matrix_mode_save));
-#endif        
     }
     
     void Context::bind_uniform_state(GLuint program) {
@@ -1120,7 +958,7 @@ namespace GLUP {
             GLenum GL_primitive = primitive_info_[primitive].GL_primitive;
             n /= nb_vertices_per_GL_primitive(GL_primitive);
 
-            for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+            for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
                 if(immediate_state_.buffer[i].is_enabled()) {                
                     for(index_t j=0; j<n; ++j) {
                         glEnableVertexAttribArray(i*n+j);
@@ -1128,7 +966,7 @@ namespace GLUP {
                 }
             }
         } else {
-            for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+            for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
                 if(immediate_state_.buffer[i].is_enabled()) {
                     glEnableVertexAttribArray(i);
                     
@@ -1174,7 +1012,7 @@ namespace GLUP {
             GLenum GL_primitive =
                 primitive_info_[immediate_state_.primitive()].GL_primitive;
             n /= nb_vertices_per_GL_primitive(GL_primitive);
-            for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+            for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
                 if(immediate_state_.buffer[i].is_enabled()) {
 		    for(index_t j=0; j<n; ++j) {
 			GEO_CHECK_GL();
@@ -1184,7 +1022,7 @@ namespace GLUP {
 		}
             }
         } else {
-            for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+            for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
                 if(immediate_state_.buffer[i].is_enabled()) {		
 		    GEO_CHECK_GL();                
 		    glDisableVertexAttribArray(i);
@@ -1678,7 +1516,7 @@ namespace GLUP {
                 primitive_info_[glup_primitive].VAO
             );
 	    GEO_CHECK_GL();    			
-            for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+            for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
                 glBindBuffer(GL_ARRAY_BUFFER,immediate_state_.buffer[i].VBO());
 		GEO_CHECK_GL();    					
                 for(index_t j=0; j<n; ++j) {
@@ -1991,7 +1829,7 @@ namespace GLUP {
     }
 
     void Context::bind_immediate_state_buffers_to_VAO() {
-        for(index_t i=0; i<immediate_state_.buffer.size(); ++i) {
+        for(index_t i=0; i<ImmediateState::NB_IMMEDIATE_BUFFERS; ++i) {
             glBindBuffer(
                 GL_ARRAY_BUFFER,
                 immediate_state_.buffer[i].VBO()

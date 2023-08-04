@@ -127,13 +127,22 @@ namespace GEO {
          */
         ParallelDelaunay3d(coord_index_t dimension = 3);
 
-        virtual void set_vertices(
+	/**
+	 * \copydoc Delaunay::set_vertices
+	 */
+        void set_vertices(
             index_t nb_vertices, const double* vertices
-        );
+        ) override;
 
-        virtual index_t nearest_vertex(const double* p) const;
+	/**
+	 * \copydoc Delaunay::nearest_vertex()
+	 */
+        index_t nearest_vertex(const double* p) const override;
 
-        virtual void set_BRIO_levels(const vector<index_t>& levels);
+	/**
+	 * \copydoc Delaunay::set_BRIO_levels()
+	 */
+        void set_BRIO_levels(const vector<index_t>& levels) override;
 
     private:
         vector<signed_index_t> cell_to_v_store_;

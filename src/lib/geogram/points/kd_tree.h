@@ -63,48 +63,48 @@ namespace GEO {
     class GEOGRAM_API KdTree : public NearestNeighborSearch {
     public:
         /**
-         * \brief Creates a new BalancedKdTree.
-         * \param[in] dim dimension of the points
+         * \brief KdTree constructor.
+         * \param[in] dim dimension of the points.
          */
 	KdTree(coord_index_t dim);
 
 	/** \copydoc NearestNeighborSearch::set_points() */
-        virtual void set_points(index_t nb_points, const double* points);
+        void set_points(index_t nb_points, const double* points) override;
 
 	/** \copydoc NearestNeighborSearch::stride_supported() */	
-        virtual bool stride_supported() const;
+        bool stride_supported() const override;
 
 	/** \copydoc NearestNeighborSearch::set_points() */
-        virtual void set_points(
+        void set_points(
             index_t nb_points, const double* points, index_t stride
-        );
+        ) override;
 
-	/** \copydoc NearestNeighborSearch::get_nearest_beighbors() */
-        virtual void get_nearest_neighbors(
+	/** \copydoc NearestNeighborSearch::get_nearest_neighbors() */
+        void get_nearest_neighbors(
             index_t nb_neighbors,
             const double* query_point,
             index_t* neighbors,
             double* neighbors_sq_dist
-        ) const;
+        ) const override;
 
-	/** \copydoc NearestNeighborSearch::get_nearest_beighbors() */
-        virtual void get_nearest_neighbors(
+	/** \copydoc NearestNeighborSearch::get_nearest_neighbors() */
+        void get_nearest_neighbors(
             index_t nb_neighbors,
             const double* query_point,
             index_t* neighbors,
             double* neighbors_sq_dist,
 	    KeepInitialValues
-        ) const;
+        ) const override;
 
-	/** \copydoc NearestNeighborSearch::get_nearest_beighbors() */	
-        virtual void get_nearest_neighbors(
+	/** \copydoc NearestNeighborSearch::get_nearest_neighbors() */	
+        void get_nearest_neighbors(
             index_t nb_neighbors,
             index_t query_point,
             index_t* neighbors,
             double* neighbors_sq_dist
-        ) const;
-
-	/************************************************************************/
+        ) const override;
+	
+	/**********************************************************************/
 	
         /**
          * \brief The context for traversing a KdTree.
@@ -431,7 +431,7 @@ namespace GEO {
 	/**
 	 * \brief KdTree destructor.
 	 */
-	virtual ~KdTree();
+	~KdTree() override;
 
       protected:
         vector<index_t> point_index_;
@@ -458,18 +458,11 @@ namespace GEO {
          */
         BalancedKdTree(coord_index_t dim);
 
-    public:
-        /**
-         * \brief Used by multithread tree construction
-         * in the implementation of set_points()
-         */
-        void operator() (index_t i);
-
     protected:
         /**
          * \brief BalancedKdTree destructor
          */
-        virtual ~BalancedKdTree();
+        ~BalancedKdTree() override;
 
         /**
          * \brief Returns the maximum node index in subtree.
@@ -533,16 +526,16 @@ namespace GEO {
         );
 
 	/** \copydoc KdTree::build_tree() */
-	virtual index_t build_tree();
+	index_t build_tree() override;
 
 	/** \copydoc KdTree::get_node() */
-	virtual void get_node(
+	void get_node(
 	    index_t n, index_t b, index_t e,
 	    index_t& left_child, index_t& right_child,
 	    coord_index_t&  splitting_coord,
 	    index_t& m,
 	    double& splitting_val
-	) const;
+	) const override;
 	
     protected:
 	
@@ -590,16 +583,16 @@ namespace GEO {
 
     protected:	
 	/** \copydoc KdTree::build_tree() */
-	virtual index_t build_tree();
+	index_t build_tree() override;
 
 	/** \copydoc KdTree::get_node() */
-	virtual void get_node(
+	void get_node(
 	    index_t n, index_t b, index_t e,
 	    index_t& left_child, index_t& right_child,
 	    coord_index_t&  splitting_coord,
 	    index_t& m,
 	    double& splitting_val
-	) const;
+	) const override;
 
         /**
          * \brief Creates the subtree under a node.

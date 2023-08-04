@@ -280,6 +280,77 @@ namespace GEO {
 	M.facets.connect();
     }
 
+   
+    void mesh_triangulate_center_vertex(
+	Mesh& M, index_t facets_begin, index_t facets_end,
+	MeshSplitCallbacks* cb	
+    ) {
+	MeshSplitCallbacks default_cb(&M);
+	if(cb == nullptr) {
+	    cb = &default_cb;
+	}
+	
+	if(facets_end == index_t(-1)) {
+	    facets_end = M.facets.nb();
+	}
+	
+	index_t nv0 = M.vertices.nb();
+	index_t nf0 = M.facets.nb();
+
+	// Compute corner to new vertex and facet to new vertex
+	// mappings.
+	
+	vector<index_t> ftov(M.facets.nb(), NO_VERTEX);
+	
+	index_t nbnewv=0;
+	index_t nbnewf=0;
+	for(index_t f=facets_begin; f<facets_end; ++f) {
+	    ftov[f] = nbnewv;
+	    ++nbnewv;
+	    nbnewf += M.facets.nb_vertices(f);
+	}
+
+	// Create vertices
+	M.vertices.create_vertices(nbnewv);
+	for(index_t f=facets_begin; f<facets_end; ++f) {
+	    cb->zero_vertex(ftov[f] + nv0);
+	    for(index_t c1=M.facets.corners_begin(f);
+		c1<M.facets.corners_end(f); ++c1
+	    ) {
+		index_t v1 = M.facet_corners.vertex(c1);
+		cb->madd_vertex(ftov[f]+nv0, 1.0, v1);
+	    }
+	    double s = 1.0 / double(M.facets.nb_vertices(f));
+	    cb->scale_vertex(ftov[f]+nv0, s);
+	}
+
+	// Create facets
+	M.facets.create_triangles(nbnewf);
+	index_t cur_f = 0;
+	for(index_t f=facets_begin; f<facets_end; ++f) {
+	    for(
+		index_t c1=M.facets.corners_begin(f);
+		c1<M.facets.corners_end(f); ++c1
+	     ) {
+	        index_t c2 = M.facets.next_corner_around_facet(f,c1);
+		index_t v1 = M.facet_corners.vertex(c1);
+		index_t v2 = M.facet_corners.vertex(c2);
+		M.facets.attributes().copy_item(cur_f + nf0, f);
+		M.facets.set_vertex(cur_f + nf0, 0, v1);
+		M.facets.set_vertex(cur_f + nf0, 1, v2);
+		M.facets.set_vertex(cur_f + nf0, 2, nv0+ftov[f]);
+		++cur_f;
+	    }
+	}
+
+	vector<index_t> to_delete(M.facets.nb(),0);
+	for(index_t f=facets_begin; f<facets_end; ++f) {
+	    to_delete[f] = 1;
+	}
+	M.facets.delete_elements(to_delete);
+	M.facets.connect();
+    }
+   
     void mesh_split_catmull_clark(Mesh& M, MeshSplitCallbacks* cb) {
 
 	geo_cite("journals/CAD/CatmullRGB");
@@ -298,12 +369,9 @@ namespace GEO {
 	index_t nb_f_orig = M.facets.nb();
 	
 	// Create edge and facet vertices
-	FOR(f1,M.facets.nb()) {
+	for(index_t f1: M.facets) {
 	    facet_vertex[f1] = cb->create_vertex();
-	    for(
-		index_t c1 = M.facets.corners_begin(f1);
-		c1<M.facets.corners_end(f1); ++c1
-	    ) {
+	    for(index_t c1: M.facets.corners(f1)) {
 		index_t v = M.facet_corners.vertex(c1);
 		++vertex_degree[v];
 		index_t f2 = M.facet_corners.adjacent_facet(c1);
@@ -328,12 +396,9 @@ namespace GEO {
 	}
 	
 	// Compute facet vertices
-	FOR(f, M.facets.nb()) {
+	for(index_t f: M.facets) {
 	    double f_degree = double(M.facets.nb_vertices(f));
-	    for(
-		index_t c=M.facets.corners_begin(f);
-		c<M.facets.corners_end(f); ++c
-	    ) {
+	    for(index_t c: M.facets.corners(f)) {
 		index_t v = M.facet_corners.vertex(c);
 		cb->madd_vertex(facet_vertex[f], 1.0 / f_degree, v);
 		if(M.facet_corners.adjacent_facet(c) == NO_FACET) {
@@ -343,11 +408,8 @@ namespace GEO {
 	}
 
 	// Compute edge vertices
-	FOR(f, M.facets.nb()) {
-	    for(
-		index_t c=M.facets.corners_begin(f);
-		c<M.facets.corners_end(f); ++c
-	    ) {
+	for(index_t f: M.facets) {
+	    for(index_t c: M.facets.corners(f)) {
 		index_t v = M.facet_corners.vertex(c);
 		if(M.facet_corners.adjacent_facet(c) == NO_FACET) {
 		    cb->madd_vertex(corner_vertex[c], 1.0/2.0, v);
@@ -375,11 +437,8 @@ namespace GEO {
 	    }
 	}
 
-	FOR(f, M.facets.nb()) {
-	    for(
-		index_t c = M.facets.corners_begin(f);
-		c<M.facets.corners_end(f); ++c
-	    ) {
+	for(index_t f: M.facets) {
+	    for(index_t c: M.facets.corners(f)) {
 		index_t v = M.facet_corners.vertex(c);
 		double n = double(vertex_degree[v]);
 		
@@ -399,10 +458,7 @@ namespace GEO {
 	
 	// Create new facets
 	FOR(f, nb_f_orig) {
-	    for(
-		index_t c = M.facets.corners_begin(f);
-		c<M.facets.corners_end(f); ++c
-	    ) {
+	    for(index_t c: M.facets.corners(f)) {
 		index_t v = M.facet_corners.vertex(c);
 		index_t c2 = M.facets.prev_corner_around_facet(f,c);
 		index_t new_f = M.facets.create_quad(

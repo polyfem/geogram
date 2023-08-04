@@ -1154,9 +1154,9 @@ namespace GEO {
                 index_t cell_size =
                     std::max(nb_vertices(old_cell), nb_facets(old_cell));
                 for(index_t i=0; i<cell_size; ++i) {
-                    cell_corner_facets_permutation.push_back(
-                        cell_ptr_[old_cell]+i
-                    );
+		    cell_corner_facets_permutation.push_back(
+			corners_begin(old_cell)+i
+		    );
                 }
             }
             
@@ -1701,16 +1701,24 @@ namespace GEO {
     }
 
     void MeshCells::compute_borders() {
+	Attribute<index_t> facet_cell;
+	compute_borders(facet_cell);
+    }
+    
+    void MeshCells::compute_borders(Attribute<index_t>& facet_cell) {
         mesh_.facets.clear(true,false);
         if(is_simplicial_) {
             for(index_t t=0; t<nb(); ++t) {
                 for(index_t f=0; f<4; ++f) {
                     if(adjacent(t,f) == NO_CELL) {
-                        mesh_.facets.create_triangle(
+                        index_t new_f = mesh_.facets.create_triangle(
                             tet_facet_vertex(t,f,0),
                             tet_facet_vertex(t,f,1),
                             tet_facet_vertex(t,f,2)
                         );
+			if(facet_cell.is_bound()) {
+			    facet_cell[new_f] = t;
+			}
                     }
                 }
             }
@@ -1718,16 +1726,17 @@ namespace GEO {
             for(index_t c=0; c<nb(); ++c) {
                 for(index_t f=0; f<nb_facets(c); ++f) {
                     if(adjacent(c,f) == NO_CELL) {
+			index_t new_f = index_t(-1);
                         switch(facet_nb_vertices(c,f)) {
                         case 3:
-                            mesh_.facets.create_triangle(
+                            new_f = mesh_.facets.create_triangle(
                                 facet_vertex(c,f,0),
                                 facet_vertex(c,f,1),
                                 facet_vertex(c,f,2)
                             );
                             break;
                         case 4:
-                            mesh_.facets.create_quad(
+                            new_f = mesh_.facets.create_quad(
                                 facet_vertex(c,f,0),
                                 facet_vertex(c,f,1),
                                 facet_vertex(c,f,2),
@@ -1737,6 +1746,9 @@ namespace GEO {
                         default:
                             geo_assert_not_reached;
                         }
+			if(facet_cell.is_bound()) {
+			    facet_cell[new_f] = c;
+			}
                     }
                 }
             }
@@ -2145,6 +2157,29 @@ namespace {
         return result;
     }
 
+    /**
+     * \brief Gets the names of all attributes from an AttributeManager
+     * \param[in] attributes a const reference to the attribute manager
+     * \param[in] prefix a const rerefenre to a string to be prepended to
+     *  all attribute names
+     * \return a ';'-separated list of all the attributes
+     */
+    std::string get_attributes_impl(
+        const AttributesManager& attributes,
+        const std::string& prefix
+    ) {
+        std::string result;
+        vector<std::string> attribute_names;
+        attributes.list_attribute_names(attribute_names);
+
+        for(index_t i=0; i<attribute_names.size(); ++i) {
+	    if(result != "") {
+		result += ";";
+	    }
+	    result += prefix + "." + attribute_names[i];
+        }
+        return result;
+    }
 
     /**
      * \brief Gets the names of all vector attributes from an AttributeManager
@@ -2184,7 +2219,7 @@ namespace {
 	    }
 	    if(
 		store->elements_type_matches(typeid(vec3).name()) &&
-		(max_dim == 0 || 2 <= max_dim)
+		(max_dim == 0 || 3 <= max_dim)
 	    ) {
 		if(result != "") {
 		    result += ";";
@@ -2213,6 +2248,36 @@ namespace {
 }
 
 namespace GEO {
+
+    std::string Mesh::get_attributes() const {
+        std::string result;
+        strappend(
+            result,get_attributes_impl(vertices.attributes(),"vertices")
+        );
+        strappend(
+            result,get_attributes_impl(edges.attributes(),"edges")
+        );
+        strappend(
+            result,get_attributes_impl(facets.attributes(),"facets")
+        );
+        strappend(
+	    result,get_attributes_impl(
+		facet_corners.attributes(),"facet_corners"
+	    )
+        );
+        strappend(
+            result,get_attributes_impl(cells.attributes(),"cells")
+        );
+        strappend(
+            result,get_attributes_impl(
+                cell_corners.attributes(),"cell_corners"
+            )
+        );
+        strappend(result,get_attributes_impl(
+            cell_facets.attributes(),"cell_facets")
+        );        
+        return result;
+    }
     
     std::string Mesh::get_scalar_attributes() const {
         std::string result;

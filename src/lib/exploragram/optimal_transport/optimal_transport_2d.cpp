@@ -199,15 +199,16 @@ namespace {
 	/**
 	 * \copydoc RVDPolygonCallback::operator()
 	 */
-	virtual void operator() (
+	void operator() (
 	    index_t v,
 	    index_t t,
 	    const GEOGen::Polygon& P
-	) const {
+	) const override {
 	    geo_argused(t);
 	    if(OTM_->air_fraction() != 0.0 && OTM_->nb_air_particles() == 0) {
 		if(v < OTM_->nb_points()) {
-		    OptimalTransportMap2d* OTM = static_cast<OptimalTransportMap2d*>(OTM_);		    
+		    OptimalTransportMap2d* OTM =
+			static_cast<OptimalTransportMap2d*>(OTM_);
 		    double R = OTM_->weight(v);
 		    geo_assert(R > 0.0);
 		    R = ::sqrt(R);
@@ -616,7 +617,7 @@ namespace GEO {
             mesh_->vertices.attributes(), "weight"
         );
         
-        for(index_t t = 0; t < mesh_->facets.nb(); ++t) {
+        for(index_t t: mesh_->facets) {
             double tri_mass = GEO::Geom::triangle_area(
                 vec2(mesh_->vertices.point_ptr(mesh_->facets.vertex(t, 0))),
 		vec2(mesh_->vertices.point_ptr(mesh_->facets.vertex(t, 1))),

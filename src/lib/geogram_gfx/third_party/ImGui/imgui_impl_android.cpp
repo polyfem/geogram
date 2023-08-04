@@ -16,13 +16,11 @@
 
 // TODO (Bugs to be fixed):
 // ------------------------
-//  - soft keyboard directional keys do not always work (it depends on the used keyboard,
-//     for some keyboards, they work a little bit, randomly, for some others they work...)
-//
-//  - app is restarted when connecting/disconnecting a physical keyboard
-//     while application is running (I do not understand, I have:
-//        android:configChanges="orientation|keyboardHidden|keyboard"
-//     in AndroidManifest.xml) -> this one is more related to android_main.cpp
+//  - soft keyboard directional keys do not always work
+//     (it depends on the used keyboard,
+//     for some keyboards, they work a little bit, randomly,
+//     for some others they work...)
+//  - right mouse button is not super-responsive
 
 // TODO (Improvements):
 // --------------------
@@ -35,7 +33,6 @@
 //  - setMousePos
 
 
-
 #ifdef __ANDROID__
 
 #include "imgui.h"
@@ -43,39 +40,77 @@
 
 #include <EGL/egl.h>
 #include <GLES/gl.h>
+#include <android/log.h>
+
 #include <time.h>
 #include <cassert>
 #include <stdexcept>
 #include <cctype>
+#include <cmath>
+
+#include <string>
+#include <geogram/basic/string.h>
+#include <geogram/basic/android_utils.h>
+#include <geogram_gfx/gui/application.h>
+
+// Pulled this dependency on Application:
+// - for the constants in geogram_gfx/gui/events.h
+// - to quit the application if the back key is pressed
+// (by calling Application::instance()->stop()
+// (TODO: it is probably possible to use the 'default behavior' of
+//  the 'back' button instead, by returning the correct value in
+//  the event handler, to be investigated)
+
+using namespace GEO;
 
 namespace {
+    inline int decode_action(int action) {
+	switch(action) {
+	    case AMOTION_EVENT_ACTION_BUTTON_PRESS:
+	    case AMOTION_EVENT_ACTION_DOWN:
+		return EVENT_ACTION_DOWN;
+	    case AMOTION_EVENT_ACTION_BUTTON_RELEASE:	    
+	    case AMOTION_EVENT_ACTION_UP:
+		return EVENT_ACTION_UP;
+	    case AMOTION_EVENT_ACTION_MOVE:
+		return EVENT_ACTION_DRAG;
+	}
+	return EVENT_ACTION_UNKNOWN;
+    }
+
+    struct android_app* g_app = nullptr;
     double g_Time = 0.0;
     float g_mouseX = 0.0f;
     float g_mouseY = 0.0f;
-    bool  g_mousePressed[5] = {false, false, false, false, false};
+    bool  g_mousePressed[5]     = {false, false, false, false, false};
+    int   g_mouseJustPressed[5] = {0, 0, 0, 0, 0};    
     bool  g_resetKeys = false;
+    ImGui_ImplAndroid_MouseUserCallback g_mouse_CB = nullptr;
+
+    inline ImVec2 barycenter(const ImVec2& p1, const ImVec2& p2) {
+	return ImVec2(0.5f*(p1.x+p1.x), 0.5f*(p1.y+p2.y));
+    }
+
+    inline float distance(const ImVec2& p1, const ImVec2& p2) {
+	return ::sqrtf((p2.x-p1.x)*(p2.x-p1.x) + (p2.y-p1.y)*(p2.y-p1.y));
+    }
+
 }
 
-// Some utilities functions that interact with Android.
-namespace AndroidUtils {
-    
-    // Shows or hides the software keyboard.
-    void set_soft_keyboard_visibility(struct android_app* app, bool show);
-
-    // Converts a keycode to a unicode.
-    // deviceId, keyCode, metaState can be obtained from the InputEvent.
-    jint keycode_to_unicode(
-	struct android_app* app, int32_t deviceId, int32_t keyCode, int32_t metaState
-    );
+void ImGui_ImplAndroid_SetMouseUserCallback(
+    ImGui_ImplAndroid_MouseUserCallback CB
+) {
+    g_mouse_CB = CB;
 }
-
 
 bool ImGui_ImplAndroid_Init(struct android_app* app) {
+    g_app = app;
     g_Time = 0.0;
     g_mouseX = 0.0f;
     g_mouseY = 0.0f;
     for (int i = 0; i < IM_ARRAYSIZE(g_mousePressed); i++) {
-	g_mousePressed[i] = false;
+	g_mousePressed[i]     = false;
+	g_mouseJustPressed[i] = 0;	
     }
     // TODO: mouse cursor
     // TODO: setmousepos ?
@@ -121,7 +156,16 @@ static void ImGui_ImplAndroid_UpdateMousePosAndButtons()
     ImGuiIO& io = ImGui::GetIO();
 
     for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++) {
-        io.MouseDown[i] = g_mousePressed[i];
+	// We do the same thing as in imgui_impl_glfw.cpp:
+        // If a mouse press event came, always pass it as
+	// "mouse held this frame", so we don't miss click-release
+	// events that are shorter than 1 frame.
+	// (unlike in imgui_impl_glfw.cpp, we do that during several
+	//  frames instead of a single one).
+        io.MouseDown[i] = (g_mouseJustPressed[i] != 0) || g_mousePressed[i];
+	if(g_mouseJustPressed[i] != 0) {
+	    --g_mouseJustPressed[i];
+	}
     }
     io.MousePos = ImVec2(g_mouseX, g_mouseY);
 }
@@ -195,17 +239,129 @@ int32_t  ImGui_ImplAndroid_FingerEvent(
 			 action == AMOTION_EVENT_ACTION_MOVE );
 
     int nb_fingers = int(AMotionEvent_getPointerCount(event));
+
     int btn = nb_fingers-1;
     for(int i=0; i<IM_ARRAYSIZE(g_mousePressed); ++i) {
 	if(i == btn) {
 	    g_mousePressed[i] = down_or_move;
+	    if(action == AMOTION_EVENT_ACTION_DOWN) {
+		// Notify that the mouse was just pressed during two
+		// frames. This is needed else ImGui does not notice
+		// that the button was pressed (I think it needs one
+		// frame to notice that the cursor moved to the button,
+		// and another frame to notice that the button was
+		// pressed). This is because fingers do not generate
+		// events when hovering the touch screen.
+		g_mouseJustPressed[i] = 2;
+	    }
 	} else {
 	    g_mousePressed[i] = false;
 	}
     }
+
     g_mouseX = AMotionEvent_getX(event, nb_fingers-1);
     g_mouseY = AMotionEvent_getY(event, nb_fingers-1);
-    
+
+    if(g_mouse_CB != nullptr) {
+	static int last_button_ = -1;
+	
+	if(nb_fingers == 1) {
+	    if(last_button_ != -1 && last_button_ != 0) {
+		g_mouse_CB(
+		    g_mouseX, g_mouseY, last_button_,
+		    EVENT_ACTION_UP, EVENT_SOURCE_FINGER
+		);
+	    }
+	    last_button_ = 0;
+	    g_mouse_CB(
+		g_mouseX, g_mouseY, 0,
+		decode_action(action), EVENT_SOURCE_FINGER
+	    );
+	} else if(nb_fingers == 2) {
+	    // Two-fingers interactions: does both zoom (button 1) and
+	    // translation (button 2). The chosen action depends on the
+	    // variation of the distance between the two fingers and the
+	    // displacement of the centroid of the two fingers:
+	    // if distance varies most -> zoom
+	    // if centroid moves most  -> translation
+	    
+	    if(last_button_ != -1 && last_button_ != 2) {
+		g_mouse_CB(
+		    g_mouseX, g_mouseY, last_button_,
+		    EVENT_ACTION_UP, EVENT_SOURCE_FINGER
+		);
+	    }
+	    ImVec2 finger1(
+		AMotionEvent_getX(event, 0),
+		AMotionEvent_getY(event, 0)
+	    );
+	    ImVec2 finger2(
+		AMotionEvent_getX(event, 1),
+		AMotionEvent_getY(event, 1)
+	    );
+	    float length = distance(finger1, finger2);
+	    ImVec2 center = barycenter(finger1, finger2);
+	    
+	    static float last_length = 0.0f;
+	    static ImVec2 last_center;
+
+	    if(action == AMOTION_EVENT_ACTION_MOVE) {
+		if(distance(center, last_center) > ::fabs(length-last_length)) {
+		    // Translation: synthetise press btn 1, move, release btn 1
+		    g_mouse_CB(
+			last_center.x, last_center.y, 1,
+			EVENT_ACTION_DOWN, EVENT_SOURCE_FINGER
+		    );
+		    g_mouse_CB(
+			center.x, center.y, 1,
+			EVENT_ACTION_DRAG, EVENT_SOURCE_FINGER
+		    );
+		    g_mouse_CB(
+			center.x, center.y, 1,
+			EVENT_ACTION_UP, EVENT_SOURCE_FINGER
+		    );
+		} else {
+		    // Zoom: synthetise press btn 2, move, release btn 2
+		    g_mouse_CB(
+			0.0f, last_length, 2,
+			EVENT_ACTION_DOWN, EVENT_SOURCE_FINGER
+		    );
+		    g_mouse_CB(
+			0.0f, length, 2,
+			EVENT_ACTION_DRAG, EVENT_SOURCE_FINGER
+		    );
+		    g_mouse_CB(
+			0.0f, length, 2,
+			EVENT_ACTION_UP, EVENT_SOURCE_FINGER
+		    );
+		}
+	    }
+	    last_length = length;
+	    last_center = center;
+	    last_button_ = 2;
+	} else if(nb_fingers == 3) {
+	    if(last_button_ != -1 && last_button_ != 1) {
+		g_mouse_CB(
+		    g_mouseX, g_mouseY, last_button_,
+		    EVENT_ACTION_UP, EVENT_SOURCE_FINGER
+		);
+	    }
+	    if(last_button_ != 1) {
+		last_button_ = 1;
+		g_mouse_CB(
+		    g_mouseX, g_mouseY, 1,
+		    EVENT_ACTION_DOWN, EVENT_SOURCE_FINGER
+		);
+	    } else {
+		g_mouse_CB(
+		    g_mouseX, g_mouseY, 1,
+		    decode_action(action), EVENT_SOURCE_FINGER
+		);
+	    }
+	}
+
+    }
+
     return 1;
 }
 
@@ -217,21 +373,38 @@ int32_t ImGui_ImplAndroid_StylusEvent(
     int32_t action = AMotionEvent_getAction(event);
     bool down_or_move = (action == AMOTION_EVENT_ACTION_DOWN ||
 			 action == AMOTION_EVENT_ACTION_MOVE );
+
     int btn = (
 	(AMotionEvent_getButtonState(event) &
 	    AMOTION_EVENT_BUTTON_STYLUS_PRIMARY) != 0
     ) ? 1 : 0;
+
     for(int i=0; i<IM_ARRAYSIZE(g_mousePressed); ++i) {
 	if(i == btn) {
 	    g_mousePressed[i] = down_or_move;
+	    if(action == AMOTION_EVENT_ACTION_DOWN) {
+		g_mouseJustPressed[i] = 1;
+	    }
 	} else {
 	    g_mousePressed[i] = false;
 	}
     }
     g_mouseX = AMotionEvent_getX(event, 0);
     g_mouseY = AMotionEvent_getY(event, 0);
+
+    if(g_mouse_CB != nullptr) {
+	g_mouse_CB(
+	    g_mouseX, g_mouseY, btn, decode_action(action), EVENT_SOURCE_STYLUS
+	);
+    }
+	
     return 1;    
 }
+
+// Declared as static global so that key handler can 'push' button 1
+// when the back key event is synthetized by a right mouse click
+// (but this does not fully work, to be investigated...)
+static int mouse_handler_btn = -1;
 
 // Handles a standard USB or bluetooth mouse connected to the phone.
 int32_t  ImGui_ImplAndroid_MouseEvent(
@@ -244,11 +417,13 @@ int32_t  ImGui_ImplAndroid_MouseEvent(
     g_mousePressed[0] = (buttons &  AMOTION_EVENT_BUTTON_PRIMARY) != 0;
     g_mousePressed[1] = (buttons &  AMOTION_EVENT_BUTTON_SECONDARY) != 0;
     g_mousePressed[2] = (buttons &  AMOTION_EVENT_BUTTON_TERTIARY) != 0;
+    // TODO: g_mouseJustPressed
     g_mouseX = AMotionEvent_getX(event, 0);
     g_mouseY = AMotionEvent_getY(event, 0);
 
     // Mouse wheel
     int32_t action = AMotionEvent_getAction(event);
+
     if(action == AMOTION_EVENT_ACTION_SCROLL) {
 	float hscroll = AMotionEvent_getAxisValue(
 	    event, AMOTION_EVENT_AXIS_HSCROLL, 0
@@ -260,6 +435,48 @@ int32_t  ImGui_ImplAndroid_MouseEvent(
 	io.MouseWheelH += hscroll;
 	io.MouseWheel  += vscroll;
     }
+
+    if(g_mouse_CB != nullptr) {
+	int32_t action = AMotionEvent_getAction(event);
+	if(action == AMOTION_EVENT_ACTION_SCROLL) {
+	    // Synthetize btn 2 push, move, btn 2 release
+	    ImGuiIO& io = ImGui::GetIO();	    
+	    g_mouse_CB(
+		g_mouseX, g_mouseY, 2,
+		EVENT_ACTION_DOWN, EVENT_SOURCE_MOUSE
+	    );
+	    g_mouse_CB(
+		g_mouseX + io.MouseWheelH, g_mouseY - 6.0f * io.MouseWheel, 2,
+		EVENT_ACTION_DRAG, EVENT_SOURCE_MOUSE
+	    );	    
+	    g_mouse_CB(
+		g_mouseX + io.MouseWheelH, g_mouseY - 6.0f * io.MouseWheel, 2,
+		EVENT_ACTION_UP, EVENT_SOURCE_MOUSE
+	    );	    
+	} else {
+	    // TODO2: does not seem to work with right button,
+	    //   ... to be investigated (does it generate the
+	    //  event or does it only generate a 'back' keypress)
+	    // TODO3: AMotionEvent_getActionButton(event) would
+	    // be better, but it does not seem to be defined.
+	    if(
+		action == AMOTION_EVENT_ACTION_BUTTON_PRESS ||
+		action ==  AMOTION_EVENT_ACTION_DOWN
+	    ) {
+		if((buttons &  AMOTION_EVENT_BUTTON_PRIMARY) != 0) {
+		    mouse_handler_btn = 0;
+		} else if(((buttons &  AMOTION_EVENT_BUTTON_SECONDARY) != 0)) {
+		    mouse_handler_btn = 1;
+		} else if(((buttons &  AMOTION_EVENT_BUTTON_TERTIARY) != 0)) {
+		    mouse_handler_btn = 2;
+		}
+	    }
+	    g_mouse_CB(
+		g_mouseX, g_mouseY, mouse_handler_btn,
+		decode_action(action), EVENT_SOURCE_MOUSE
+	    );	    
+	}
+    }    
     
     return 1;    
 }
@@ -317,9 +534,39 @@ int32_t ImGui_ImplAndroid_KeyEvent(
 	io.KeySuper = ((modifiers & AMETA_META_ON) != 0);
     }
 
+    // WIP: right mouse handler (does not work yet)
+    // Detect whether it was triggered by right mouse click
+    // (if it was the case, re-route it).
+    if(action == AKEY_EVENT_ACTION_UP &&
+       key == AKEYCODE_BACK &&
+       AInputEvent_getSource(event) == AINPUT_SOURCE_MOUSE &&
+       g_mouse_CB != nullptr 
+     ) {
+	mouse_handler_btn = -1;
+	g_mouse_CB(g_mouseX, g_mouseY, 1, EVENT_ACTION_UP, EVENT_SOURCE_MOUSE);
+    }
+    
     if(action == AKEY_EVENT_ACTION_DOWN) {
 	if(key == AKEYCODE_BACK) {
-	    AndroidUtils::set_soft_keyboard_visibility(app, true);
+	    // WIP: right mouse handler (does not work yet)	    
+	    // Detect whether it was triggered by right mouse click
+	    // (if it was the case, re-route it).
+	    if(AInputEvent_getSource(event) != AINPUT_SOURCE_MOUSE) {
+		// If real back button, quit application
+		// (normally, returning 0 should do the same, but
+		//  it does seem to work, to be understood...).
+		if(Application::instance() != nullptr) {
+		    Application::instance()->stop();
+		}
+	    } else {
+		if(g_mouse_CB != nullptr) {
+		    mouse_handler_btn = 1;
+		    g_mouse_CB(
+			g_mouseX, g_mouseY, 1,
+			EVENT_ACTION_DOWN, EVENT_SOURCE_MOUSE
+		    );
+		}
+	    }
 	} else {
 	    jint unicode = AndroidUtils::keycode_to_unicode(
 		app, device, key, modifiers
@@ -335,7 +582,7 @@ int32_t ImGui_ImplAndroid_KeyEvent(
     return 1;
 }
 
-int32_t  ImGui_ImplAndroid_InputEvent(
+int32_t ImGui_ImplAndroid_InputEvent(
     struct android_app* app, AInputEvent* event
 ) {
     int32_t result = 0;
@@ -352,224 +599,8 @@ int32_t  ImGui_ImplAndroid_InputEvent(
     return result;
 }
     
-/*****************************************************************/
-
-// Functions that interact with Java.
-
-namespace AndroidUtils {
-
-   // Display soft keyboard programmatically
-   //https://groups.google.com/forum/?fromgroups=#!topic/android-ndk/Tk3g00wLKhk
-   //   (see alto messages about how to attach/detach thread).
-   // There is a function supposed to do that: 
-   // ANativeActivity_showSoftInput(
-   //   mApplication->activity,ANATIVEACTIVITY_SHOW_SOFT_INPUT_FORCED
-   // );
-   // (or ANATIVEACTIVITY_SHOW_SOFT_INPUT_IMPLICIT) 
-   // but I did not manage to make it work.
-    
-    void set_soft_keyboard_visibility(struct android_app* app, bool pShow) {
-
-	JavaVM* lJavaVM = app->activity->vm;
-	JNIEnv* lJNIEnv = nullptr; 
-	bool lThreadAttached = false;
-
-	// Get JNIEnv from lJavaVM using GetEnv to test whether
-	// thread is attached or not to the VM. If not, attach it
-	// (and note that it will need to be detached at the end
-	//  of the function).
-	switch (lJavaVM->GetEnv((void**)&lJNIEnv, JNI_VERSION_1_6)) {
-	    case JNI_OK:
-		break;
-	    case JNI_EDETACHED: {
-		jint lResult = lJavaVM->AttachCurrentThread(&lJNIEnv, nullptr);
-		if(lResult == JNI_ERR) {
-		    throw std::runtime_error("Could not attach current thread");
-		}
-		lThreadAttached = true;
-	    } break;
-	    case JNI_EVERSION:
-		throw std::runtime_error("Invalid java version");
-	}
-    
-	// Retrieves NativeActivity.
-	jobject lNativeActivity = app->activity->clazz;
-	jclass ClassNativeActivity = lJNIEnv->GetObjectClass(lNativeActivity);
-
-	// Retrieves Context.INPUT_METHOD_SERVICE.
-	jclass ClassContext = lJNIEnv->FindClass("android/content/Context");
-	jfieldID FieldINPUT_METHOD_SERVICE =
-	    lJNIEnv->GetStaticFieldID(
-		ClassContext,"INPUT_METHOD_SERVICE", "Ljava/lang/String;"
-	);
-	jobject INPUT_METHOD_SERVICE =
-	    lJNIEnv->GetStaticObjectField(
-		ClassContext, FieldINPUT_METHOD_SERVICE
-	);
-
-	// Runs getSystemService(Context.INPUT_METHOD_SERVICE).
-	jclass ClassInputMethodManager = lJNIEnv->FindClass(
-	    "android/view/inputmethod/InputMethodManager"
-	);
-	jmethodID MethodGetSystemService = lJNIEnv->GetMethodID(
-	    ClassNativeActivity, "getSystemService",
-	    "(Ljava/lang/String;)Ljava/lang/Object;"
-	);
-	jobject lInputMethodManager = lJNIEnv->CallObjectMethod(
-	    lNativeActivity, MethodGetSystemService,
-	    INPUT_METHOD_SERVICE
-	);
-
-	// Runs getWindow().getDecorView().
-	jmethodID MethodGetWindow = lJNIEnv->GetMethodID(
-	    ClassNativeActivity, "getWindow",
-	    "()Landroid/view/Window;"
-	);
-	jobject lWindow = lJNIEnv->CallObjectMethod(
-	    lNativeActivity, MethodGetWindow
-	);
-	jclass ClassWindow = lJNIEnv->FindClass("android/view/Window");
-	jmethodID MethodGetDecorView = lJNIEnv->GetMethodID(
-	    ClassWindow, "getDecorView", "()Landroid/view/View;"
-	);
-	jobject lDecorView = lJNIEnv->CallObjectMethod(
-	    lWindow, MethodGetDecorView
-	);
-
-	if (pShow) {
-	    // Runs lInputMethodManager.showSoftInput(...).
-	    jmethodID MethodShowSoftInput = lJNIEnv->GetMethodID(
-		ClassInputMethodManager, "showSoftInput",
-		"(Landroid/view/View;I)Z"
-	    );
-	    lJNIEnv->CallBooleanMethod(
-		lInputMethodManager, MethodShowSoftInput,
-		lDecorView, 0
-	    );
-	} else {
-	    // Runs lWindow.getViewToken()
-	    jclass ClassView = lJNIEnv->FindClass(
-		"android/view/View"
-	    );
-	    jmethodID MethodGetWindowToken = lJNIEnv->GetMethodID(
-		ClassView, "getWindowToken", "()Landroid/os/IBinder;"
-	    );
-	    jobject lBinder = lJNIEnv->CallObjectMethod(
-		lDecorView, MethodGetWindowToken
-	    );
-
-	    // lInputMethodManager.hideSoftInput(...).
-	    jmethodID MethodHideSoftInput = lJNIEnv->GetMethodID(
-		ClassInputMethodManager, "hideSoftInputFromWindow",
-		"(Landroid/os/IBinder;I)Z"
-	    );
-	    lJNIEnv->CallBooleanMethod(
-		lInputMethodManager, MethodHideSoftInput,
-		lBinder, 0
-	    );
-	}
-
-	if(lThreadAttached) {
-	    lJavaVM->DetachCurrentThread();
-	}
-    }
-
-    jint keycode_to_unicode(
-	struct android_app* app,
-	int32_t pDeviceId, int32_t pKeyCode, int32_t pMetaState
-    ) {
-	jint result = 0;
-
-	// Early exit for special keys
-	// (works without it, but well, why calling all that
-	//  Java stuff if we now in advance that we do not need
-	//  to ?).
-	if(
-	    pKeyCode == AKEYCODE_TAB ||
-	    pKeyCode == AKEYCODE_DPAD_LEFT ||
-	    pKeyCode == AKEYCODE_DPAD_RIGHT ||
-	    pKeyCode == AKEYCODE_DPAD_UP ||
-	    pKeyCode == AKEYCODE_DPAD_DOWN ||
-	    pKeyCode == AKEYCODE_PAGE_UP ||
-	    pKeyCode == AKEYCODE_PAGE_DOWN ||
-	    pKeyCode == AKEYCODE_MOVE_HOME ||
-	    pKeyCode == AKEYCODE_MOVE_END ||
-	    pKeyCode == AKEYCODE_INSERT ||
-	    pKeyCode == AKEYCODE_FORWARD_DEL ||
-	    pKeyCode == AKEYCODE_DEL ||
-	    pKeyCode == AKEYCODE_ENTER ||
-	    pKeyCode == AKEYCODE_ESCAPE
-	) {
-	    return result;
-	}
-
-	
-	JavaVM* lJavaVM = app->activity->vm;
-	JNIEnv* lJNIEnv = nullptr; 
-	bool lThreadAttached = false;
-
-	// Get JNIEnv from lJavaVM using GetEnv to test whether
-	// thread is attached or not to the VM. If not, attach it
-	// (and note that it will need to be detached at the end
-	//  of the function).
-	switch (lJavaVM->GetEnv((void**)&lJNIEnv, JNI_VERSION_1_6)) {
-	    case JNI_OK:
-		break;
-	    case JNI_EDETACHED: {
-		jint lResult = lJavaVM->AttachCurrentThread(&lJNIEnv, nullptr);
-		if(lResult == JNI_ERR) {
-		    throw std::runtime_error("Could not attach current thread");
-		}
-		lThreadAttached = true;
-	    } break;
-	    case JNI_EVERSION:
-		throw std::runtime_error("Invalid java version");
-	}
-
-	jclass ClassKeyCharacterMap = lJNIEnv->FindClass(
-	    "android/view/KeyCharacterMap"
-	);
-
-	jmethodID MethodLoad = lJNIEnv->GetStaticMethodID(
-	    ClassKeyCharacterMap, "load",
-	    "(I)Landroid/view/KeyCharacterMap;"
-	);
-
-	jobject lKeyCharacterMap = lJNIEnv->CallStaticObjectMethod(
-	    ClassKeyCharacterMap, MethodLoad, jint(pDeviceId)
-	);
-
-	jmethodID MethodGet = lJNIEnv->GetMethodID(
-	    ClassKeyCharacterMap, "get",
-	    "(II)I"
-	);
-
-	result = lJNIEnv->CallIntMethod(
-	    lKeyCharacterMap, MethodGet,
-	    jint(pKeyCode), jint(pMetaState)
-	);
-
-	if(lThreadAttached) {
-	    lJavaVM->DetachCurrentThread();
-	}
-
-	return result;
-    }
-}
-
 #endif
 
 /********************************************************************/
 
-/*
-
- Notes, links etc...
- ===================
-
- In pre-4.3 Androids, there was a bug on some devices making the 
- app. crash when hiding the soft keyboard. Normally it was fixed in Android 4.3.
-
- https://stackoverflow.com/questions/15913080/crash-when-closing-soft-keyboard-while-using-native-activity
-
-*/
 

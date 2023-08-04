@@ -171,7 +171,7 @@ namespace GEO {
         /**
          * \brief AttributeStoreCreator destructor.
          */
-        virtual ~AttributeStoreCreator();
+        ~AttributeStoreCreator() override;
         
         /**
          * \brief Creates a new attribute store.
@@ -584,7 +584,7 @@ namespace GEO {
             AttributeStore(index_t(sizeof(T)),dim) {
         }
 
-        virtual void resize(index_t new_size) {
+        void resize(index_t new_size) override {
             store_.resize(new_size*dimension_);
             notify(
                 store_.empty() ? nullptr : Memory::pointer(store_.data()),
@@ -593,7 +593,7 @@ namespace GEO {
             );
         }
 
-	virtual void reserve(index_t new_capacity) {
+	void reserve(index_t new_capacity) override {
 	    if(new_capacity > capacity()) {
 		store_.reserve(new_capacity*dimension_);
 		cached_capacity_ = new_capacity;
@@ -605,7 +605,7 @@ namespace GEO {
 	    }
 	}
 
-	virtual void clear(bool keep_memory=false) {
+	void clear(bool keep_memory=false) override {
             if(keep_memory) {
                 store_.resize(0);
             } else {
@@ -615,7 +615,7 @@ namespace GEO {
         }
 
         
-        virtual void redim(index_t dim) {
+        void redim(index_t dim) override {
             if(dim == dimension()) {
                 return;
             }
@@ -635,15 +635,17 @@ namespace GEO {
             );
         }
         
-        virtual bool elements_type_matches(const std::string& type_name) const {
+        bool elements_type_matches(
+	    const std::string& type_name
+	) const override {
             return type_name == typeid(T).name();
         }
 
-        virtual std::string element_typeid_name() const {
+        std::string element_typeid_name() const override {
             return typeid(T).name();
         }
         
-        virtual AttributeStore* clone() const {
+        AttributeStore* clone() const override {
             TypedAttributeStore<T>* result =
                 new TypedAttributeStore<T>(dimension());
             result->resize(size());
@@ -656,9 +658,9 @@ namespace GEO {
         }
         
     protected:
-        virtual void notify(
+        void notify(
             Memory::pointer base_addr, index_t size, index_t dim
-        ) {
+        ) override {
             AttributeStore::notify(base_addr, size, dim);
             geo_assert(size*dim <= store_.size());
         }
@@ -679,7 +681,7 @@ namespace GEO {
         /**
          * \copydoc AttributeStoreCreator::create_attribute_store()
          */
-        virtual AttributeStore* create_attribute_store(index_t dim) {
+        AttributeStore* create_attribute_store(index_t dim) override{
             return new TypedAttributeStore<T>(dim);
         }
     };
@@ -820,7 +822,8 @@ namespace GEO {
         /**
          * \brief Finds an AttributeStore by name.
          * \param[in] name the name under which the AttributeStore was bound
-         * \return a pointer to the attribute store or nullptr if is is undefined.
+         * \return a pointer to the attribute store or nullptr 
+	 *   if is is undefined.
          */
         AttributeStore* find_attribute_store(const std::string& name);
 
@@ -1251,7 +1254,7 @@ namespace GEO {
          * \param [in] i index of the element
          * \return a modifiable reference to the \p i%th element
          */
-        T& operator[](unsigned int i) {
+        T& operator[](index_t i) {
             geo_debug_assert(i < superclass::nb_elements());
             return ((T*)(void*)superclass::base_addr_)[i];
         }
@@ -1261,7 +1264,7 @@ namespace GEO {
          * \param [in] i index of the element
          * \return a const reference to the \p i%th element
          */
-        const T& operator[](unsigned int i) const {
+        const T& operator[](index_t i) const {
             geo_debug_assert(i < superclass::nb_elements());
             return ((const T*)(void*)superclass::base_addr_)[i];
         }
@@ -1277,6 +1280,37 @@ namespace GEO {
             }
         }
 
+	/**
+	 * \brief Copies all the values from another attribute.
+	 * \param[in] rhs the attribute to be copied.
+	 * \details rhs needs to have the same size and dimension
+	 *  as this Attribute.
+	 */
+	void copy(const Attribute<T>& rhs) {
+	    geo_assert(rhs.size() == superclass::size());
+	    geo_assert(rhs.dimension() == superclass::dimension());	    
+	    for(index_t i=0; i<superclass::nb_elements(); ++i) {
+		(*this)[i] = rhs[i];
+	    }
+	}
+	
+	/**
+	 * \brief Gets the pointer to the data.
+	 * \return a pointer to the stored array.
+	 */
+	T* data() {
+	    return (T*)AttributeStoreObserver::base_addr_;
+	}
+
+	/**
+	 * \brief Gets the pointer to the data.
+	 * \return a const pointer to the stored array.
+	 */
+	const T* data() const {
+	    return (const T*)AttributeStoreObserver::base_addr_;
+	}
+
+	
     private:
         /**
          * \brief Forbids copy.
@@ -1451,7 +1485,7 @@ namespace GEO {
          * \param [in] i index of the element
          * \return a modifiable reference to the \p i%th element
          */
-        Numeric::uint8& element(unsigned int i) {
+        Numeric::uint8& element(index_t i) {
             geo_debug_assert(i < superclass::nb_elements());
             return ((Numeric::uint8*)superclass::base_addr_)[i];
         }
@@ -1461,7 +1495,7 @@ namespace GEO {
          * \param [in] i index of the element
          * \return a const reference to the \p i%th element
          */
-        const Numeric::uint8& element(unsigned int i) const {
+        const Numeric::uint8& element(index_t i) const {
             geo_debug_assert(i < superclass::nb_elements());
             return ((const Numeric::uint8*)superclass::base_addr_)[i];
         }

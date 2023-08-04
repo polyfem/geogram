@@ -340,6 +340,10 @@ namespace {
             "sys:use_doubles", false,
             "Uses double precision in output .mesh files"
         );
+	declare_arg(
+	    "sys:ascii", false,
+	    "Use ASCII files whenever supported"
+	);	    
         declare_arg(
             "sys:compression_level", 3,
             "Compression level for created .geogram files, in [0..9]"
@@ -659,21 +663,14 @@ namespace {
      */
     void import_arg_group_gfx() {
         declare_arg_group("gfx", "OpenGL graphics options", ARG_ADVANCED);
-
-
-// Default profile will be "core" in a short future for all architectures,
-// but some users reported problems with it, so I keep for now
-// "compatibility" as the default (except on Mac/OS that prefers "core")	
         declare_arg(
             "gfx:GL_profile",
-#if defined(GEO_OS_APPLE)
+#if defined(GEO_OS_ANDROID)
+	    "ES",	    		    
+#else		    
 	    "core",
-#elif defined(GEO_OS_ANDROID)
-	    "ES",	    
-#else
-	    "compatibility",	    
 #endif	    
-            "one of core,compatibility,ES"
+            "one of core,ES"
         );
         declare_arg(
             "gfx:GL_version", 0.0,
@@ -684,16 +681,12 @@ namespace {
             "OpenGL debugging context"
         );
         declare_arg(
-            "gfx:GLSL", true,
-            "Use GLSL shaders (requires a decently recent gfx board)"
-        );
-        declare_arg(
             "gfx:GLSL_version", 0.0,
             "If non-zero, overrides GLSL version detection"
         );
         declare_arg(
             "gfx:GLUP_profile", "auto",
-            "one of auto, GLUP150, GLUP440, VanillaGL"
+            "one of auto, GLUP150, GLUP440, GLUPES"
         );
         declare_arg("gfx:full_screen", false, "full screen mode");
         declare_arg(
@@ -707,7 +700,8 @@ namespace {
         declare_arg(
             "gfx:GLSL_tesselation", true, "use tesselation shaders if available"
         );
-	declare_arg("gfx:geometry", "800x800", "resolution");
+	declare_arg("gfx:geometry", "1024x1024", "resolution");
+	declare_arg("gfx:keypress", "", "initial key sequence sent to viewer");
     }
     
     /**
@@ -720,6 +714,22 @@ namespace {
 	    "biblio:command_line", false,
 	    "dump all command line arguments in biblio. report"
 	);
+    }
+
+    /**
+     * \brief Imports the gui option group.
+     */
+    void import_arg_group_gui() {
+        declare_arg_group("gui", "gui options", ARG_ADVANCED);
+	declare_arg("gui:state", "", "gui layout state");
+	declare_arg("gui:style", "Dark", "gui style, one of Dark,Light");
+	declare_arg("gui:font_size", 18, "font size");
+	declare_arg("gui:expert", false, "expert mode for developpers");
+#ifdef GEO_OS_ANDROID
+	declare_arg("gui:phone_screen", true, "running on a phone (or testing)");	
+#else	
+	declare_arg("gui:phone_screen", false, "running on a phone (or testing)");
+#endif	
     }
     
     /************************************************************************/
@@ -867,7 +877,9 @@ namespace GEO {
                 import_arg_group_poly();
             } else if(name == "gfx") {
                 import_arg_group_gfx();
-            } else {
+            } else if(name == "gui") {
+		import_arg_group_gui();
+	    } else {
                 Logger::instance()->set_quiet(false);
                 Logger::err("CmdLine")
                     << "No such option group: " << name
