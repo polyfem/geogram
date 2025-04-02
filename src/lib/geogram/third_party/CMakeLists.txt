@@ -25,7 +25,7 @@ if(BUILD_SHARED_LIBS)
 # For Windows, nothing to do, because
 # LUA_DL_DLL is by-default activated in luaconf.h
    else()
-      add_definitions(-DLUA_USE_DLOPEN)   
+      add_definitions(-DLUA_USE_DLOPEN)
    endif()
 endif()
 
@@ -60,8 +60,8 @@ if(ANDROID)
     ${ANDROID_NDK}/sources/android/native_app_glue
   )
   message(STATUS "building for Android")
-endif()  
-
+endif()
+add_definitions(-D_LARGEFILE64_SOURCE=1)
 
 set_target_properties(
     geogram_third_party PROPERTIES
