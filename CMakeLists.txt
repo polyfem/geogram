@@ -47,6 +47,8 @@ if(NOT GEOGRAM_SUB_BUILD)
 endif()
 
 include(cmake/geogram.cmake)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/recipes/")
+include(zlib_static)
 
 set(VORPALINE_VERSION_MAJOR 1)
 set(VORPALINE_VERSION_MINOR 7)
@@ -223,4 +225,3 @@ configure_file(
 
 # This must always be last!
 include(CPack)
-

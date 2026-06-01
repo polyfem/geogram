@@ -50,7 +50,7 @@
 #include <geogram/basic/numeric.h>
 #include <geogram/basic/memory.h>
 #include <geogram/basic/string.h>
-#include <geogram/third_party/zlib/zlib.h>
+#include <zlib.h>
 
 #include <stdexcept>
 #include <fstream>

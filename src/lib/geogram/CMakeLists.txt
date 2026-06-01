@@ -33,6 +33,7 @@ set_source_files_properties(version.h PROPERTIES GENERATED true)
 include_directories(${PROJECT_BINARY_DIR}/src/lib)
 
 add_library(geogram ${SOURCES} $<TARGET_OBJECTS:geogram_third_party>)
+target_link_libraries(geogram PUBLIC ZLIB::ZLIBSTATIC)
 
 # Jeremie/Maxence: avoids the need to redeclare geogram include
 # path for targets that depend on geogram.
@@ -86,5 +87,3 @@ install(
         FILES "${PROJECT_BINARY_DIR}/geogram${VORPALINE_VERSION_MAJOR}.pc"
         DESTINATION lib${LIB_SUFFIX}/pkgconfig
 )
-
-
