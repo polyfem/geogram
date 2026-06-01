@@ -55,11 +55,11 @@ set_target_properties(geogram PROPERTIES
 		      FOLDER "GEOGRAM")
 
 if(UNIX AND VORPALINE_BUILD_DYNAMIC)
-    target_link_libraries(geogram pthread dl)
+    target_link_libraries(geogram PRIVATE pthread dl)
 endif()
 
 if(WIN32)
-    target_link_libraries(geogram psapi)
+    target_link_libraries(geogram PRIVATE psapi)
 endif()
 
 # Install the library
